@@ -1,6 +1,8 @@
 cn:
   amf:
-    host: "192.168.8.108"
+    # OAI CN AMF host (DNS name is preferred). If OAI CN is installed in namespace
+    # "oai-cn", the default `oai-amf.oai-cn.svc.cluster.local` will work.
+    host: "oai-amf.oai-cn.svc.cluster.local"
   plmn:
     mcc: "001"
     mnc: "01"
@@ -135,7 +137,8 @@ nrUe:
     fullImsi: "001010000000001"
     fullKey: "fec86ba6eb707ed08905757b1bb44b8f"
     opc: "C42449363BBAD02B66D16BC975D77CC1"
-    dnn: "internet"
+    # Must match the OAI CN SMF/UPF configured DNN (default in oai-5g-basic is "oai").
+    dnn: "oai"
     sst: "1"
     sd: "16777215"
     usrp: "rfsim"

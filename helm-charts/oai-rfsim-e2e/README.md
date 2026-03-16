@@ -1,6 +1,7 @@
 # oai-rfsim-e2e
 
 Umbrella Helm chart to deploy an **OAI NFAPI gNB (VNF)** + **OAI gNB (PNF) in RFsim mode** + **OAI NR-UE (RFsim)** against an **existing Open5GS core network**.
+Umbrella Helm chart to deploy an **OAI NFAPI gNB (VNF)** + **OAI gNB (PNF) in RFsim mode** + **OAI NR-UE (RFsim)** against an **existing OAI 5G Core (CN)**.
 
 ## Components (3 pods)
 
@@ -10,9 +11,9 @@ Umbrella Helm chart to deploy an **OAI NFAPI gNB (VNF)** + **OAI gNB (PNF) in RF
 
 ## Prerequisites
 
-- Open5GS is already deployed and reachable from the Kubernetes cluster.
+- OAI 5G Core is already deployed and reachable from the Kubernetes cluster.
 - For `nfapiGnb.multus.nfapiInterface.create=true`, Multus must be installed and the selected `hostInterface` must exist on the target node(s).
-- The UE subscriber (`nrUe.config.fullImsi/fullKey/opc`) must exist in Open5GS.
+- The UE subscriber (`nrUe.config.fullImsi/fullKey/opc`) must exist in the OAI CN subscriber database.
 
 ## Install
 
@@ -24,7 +25,7 @@ helm install oai-rfsim ./bmw-cicd-manifests/helm-charts/oai-rfsim-e2e
 
 ## Key values to override
 
-- **Core / Open5GS**
+- **Core / OAI CN**
   - `cn.amf.host`: AMF IP or DNS name reachable from the cluster
   - `cn.plmn.mcc`, `cn.plmn.mnc`, `cn.plmn.tac`
   - `cn.slice.sst`, `cn.slice.sd`, `cn.slice.dnn`
