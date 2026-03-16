@@ -2,20 +2,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}-vnf
+  name: gnb-nfapi-vnf
   labels:
+    app: gnb-nfapi-vnf
     {{- include "oai-rfsim-e2e.labels" . | nindent 4 }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: {{ .Release.Name }}-vnf
+      app: gnb-nfapi-vnf
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: {{ .Release.Name }}-vnf
+        app: gnb-nfapi-vnf
     {{- if .Values.nfapiGnb.multus.nfapiInterface.create }}
       annotations:
         k8s.v1.cni.cncf.io/networks: >-
@@ -85,6 +86,8 @@ spec:
           value: {{ .Values.nfapiGnb.config.timeZone }}
         - name: USE_ADDITIONAL_OPTIONS
           value: {{ .Values.nfapiGnb.config.useAdditionalOptions }}
+        - name: NFAPI_TRACE_LEVEL
+          value: info
         - name: AMF_HOST
           value: {{ .Values.cn.amf.host }}
         - name: N2_IF_NAME
@@ -104,6 +107,5 @@ spec:
       volumes:
         - name: configuration
           configMap:
-            name: {{ .Release.Name }}-nfapi-gnb-configmap
+            name: gnb-nfapi-vnf-configmap
 {{- end }}
-

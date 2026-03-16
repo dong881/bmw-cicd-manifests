@@ -2,13 +2,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: oai-rfsim-gnb-svc
+  name: gnb-nfapi-pnf-rfsim-svc
   labels:
-    app: {{ .Release.Name }}-pnf
+    app: gnb-nfapi-pnf-rfsim
 spec:
   type: ClusterIP
   selector:
-    app: {{ .Release.Name }}-pnf
+    app: gnb-nfapi-pnf-rfsim
   ports:
     - name: n3
       port: 2152
@@ -18,5 +18,12 @@ spec:
       port: 36412
       targetPort: 36412
       protocol: SCTP
+    - name: nfapi-p5
+      port: 50000
+      targetPort: 50000
+      protocol: SCTP
+    - name: nfapi-p7
+      port: 50010
+      targetPort: 50010
+      protocol: UDP
 {{- end }}
-

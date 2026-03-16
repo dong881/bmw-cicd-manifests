@@ -19,7 +19,7 @@ nfapiGnb:
 
   serviceAccount:
     create: true
-    name: "oai-gnb-nfapi-sa"
+    name: "gnb-nfapi-vnf-sa"
 
   multus:
     nfapiInterface:
@@ -82,7 +82,7 @@ rfsimGnb:
 
   serviceAccount:
     create: true
-    name: "oai-gnb-rfsim-sa"
+    name: "gnb-nfapi-pnf-rfsim-sa"
 
   config:
     timeZone: "Europe/Paris"
@@ -91,8 +91,8 @@ rfsimGnb:
     n2IfName: "eth0"
     n3IfName: "eth0"
     nfapiServer:
-      host: "oai-nfapi-svc"
-      port: 2153
+      host: "gnb-nfapi-vnf-svc"
+      port: 50001
 
   start:
     gnb: true
@@ -127,7 +127,7 @@ nrUe:
 
   serviceAccount:
     create: true
-    name: "oai-nr-ue-sa"
+    name: "oai-rfsim-nr-ue-sa"
 
   config:
     timeZone: "Europe/Paris"

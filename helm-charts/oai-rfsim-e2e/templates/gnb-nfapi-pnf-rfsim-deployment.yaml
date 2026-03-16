@@ -2,20 +2,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}-pnf
+  name: gnb-nfapi-pnf-rfsim
   labels:
+    app: gnb-nfapi-pnf-rfsim
     {{- include "oai-rfsim-e2e.labels" . | nindent 4 }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: {{ .Release.Name }}-pnf
+      app: gnb-nfapi-pnf-rfsim
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: {{ .Release.Name }}-pnf
+        app: gnb-nfapi-pnf-rfsim
     spec:
       securityContext:
         runAsUser: 0
@@ -63,11 +64,12 @@ spec:
           value: {{ .Values.rfsimGnb.config.timeZone }}
         - name: USE_ADDITIONAL_OPTIONS
           value: {{ .Values.rfsimGnb.config.useAdditionalOptions }}
+        - name: NFAPI_TRACE_LEVEL
+          value: info
         - name: VNF_HOST
           value: {{ .Values.rfsimGnb.config.nfapiServer.host | quote }}
       volumes:
         - name: configuration
           configMap:
-            name: {{ .Release.Name }}-rfsim-gnb-configmap
+            name: gnb-nfapi-pnf-rfsim-configmap
 {{- end }}
-

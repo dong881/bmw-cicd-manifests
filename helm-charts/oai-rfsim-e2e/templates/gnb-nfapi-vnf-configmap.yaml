@@ -1,0 +1,12 @@
+{{- if .Values.nfapiGnb.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gnb-nfapi-vnf-configmap
+data:
+  du.conf: |
+{{- range $line := (splitList "\n" (include "nfapi-gnb.duconf" .)) }}
+    {{ $line }}
+{{- end }}
+{{- end }}
+
