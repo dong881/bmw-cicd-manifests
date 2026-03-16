@@ -88,7 +88,9 @@ rfsimGnb:
 
   config:
     timeZone: "Europe/Paris"
-    useAdditionalOptions: "--nfapi PNF --rfsim --log_config.global_log_options wall_clock --sa"
+    # `--sa` is not a valid option for this PNF binary in RFsim mode and causes it to exit.
+    # Keep RFsim enabled and use wall_clock logging only.
+    useAdditionalOptions: "--nfapi PNF --rfsim --log_config.global_log_options wall_clock"
     gnbName: "oai-gnb-rfsim"
     n2IfName: "eth0"
     n3IfName: "eth0"

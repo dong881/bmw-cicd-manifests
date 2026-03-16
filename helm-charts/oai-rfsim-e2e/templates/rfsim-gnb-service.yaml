@@ -1,0 +1,18 @@
+{{- if .Values.rfsimGnb.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: oai-rfsim-gnb-svc
+  labels:
+    app: gnb-nfapi-pnf-rfsim
+spec:
+  type: ClusterIP
+  selector:
+    app: gnb-nfapi-pnf-rfsim
+  ports:
+    - name: rfsim
+      port: 4043
+      targetPort: 4043
+      protocol: TCP
+{{- end }}
+
