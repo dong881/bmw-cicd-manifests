@@ -73,6 +73,67 @@ You should see:
 - `gnb-nfapi-pnf-rfsim` (RFsim gNB-PNF) – **Running**
 - `oai-rfsim-nr-ue` (OAI NR-UE RFsim) – **Running**
 
+### 3bis. Upgrade / uninstall OAI CN and OAI gNB
+
+**Upgrade OAI CN (keep namespace and data):**
+
+```bash
+cd ~/CRAN/oai-cn5g-fed
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+
+helm dependency build ci-scripts/charts/oai-5g-basic
+
+helm upgrade oai-cn \
+  ./ci-scripts/charts/oai-5g-basic \
+  -n oai-cn \
+  -f ./bmw-oai-cn-values.yaml
+```
+
+**Uninstall OAI CN (delete release, keep namespace for reuse):**
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+
+helm uninstall oai-cn -n oai-cn
+
+# (optional) clean up leftover pods/services in namespace
+kubectl -n oai-cn delete all --all
+```
+
+**Upgrade OAI gNB (NFAPI+RFsim+UE, keep namespace):**
+
+```bash
+cd ~/CRAN
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+
+helm upgrade oai-rfsim \
+  ./bmw-cicd-manifests/helm-charts/oai-rfsim-e2e \
+  -n oai-ran
+```
+
+**Uninstall OAI gNB / UE (delete release, keep namespace):**
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+
+helm uninstall oai-rfsim -n oai-ran
+
+# (optional) clean up leftover pods/services in namespace
+kubectl -n oai-ran delete all --all
+```
+
+**完全移除 namespace（包含裡面所有資源）：**
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+
+# 刪除整個 OAI CN namespace
+kubectl delete ns oai-cn
+
+# 刪除整個 OAI RAN namespace
+kubectl delete ns oai-ran
+```
+
 ### 4. Verify control-plane connectivity (NFAPI gNB ↔ OAI CN)
 
 ```bash
