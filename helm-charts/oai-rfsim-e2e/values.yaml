@@ -1,6 +1,6 @@
 cn:
   amf:
-    host: "192.168.8.82"
+    host: "192.168.8.108"
   plmn:
     mcc: "001"
     mnc: "01"
@@ -132,10 +132,10 @@ nrUe:
   config:
     timeZone: "Europe/Paris"
     rfSimServer: "oai-rfsim-gnb-svc"
-    fullImsi: "001010000000100"
+    fullImsi: "001010000000001"
     fullKey: "fec86ba6eb707ed08905757b1bb44b8f"
     opc: "C42449363BBAD02B66D16BC975D77CC1"
-    dnn: "oai"
+    dnn: "internet"
     sst: "1"
     sd: "16777215"
     usrp: "rfsim"

@@ -10,10 +10,6 @@ spec:
   selector:
     app: {{ .Release.Name }}-vnf
   ports:
-  - name: nfapi
-    port: 2153
-    targetPort: 2153
-    protocol: UDP
   - name: nfapi-p5
     port: 50001
     targetPort: 50001
@@ -23,4 +19,3 @@ spec:
     targetPort: 50011
     protocol: UDP
 {{- end }}
-
