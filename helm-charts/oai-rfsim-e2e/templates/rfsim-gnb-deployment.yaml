@@ -1,0 +1,73 @@
+{{- if .Values.rfsimGnb.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-pnf
+  labels:
+    {{- include "oai-rfsim-e2e.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-pnf
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-pnf
+    spec:
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+      {{- if .Values.rfsimGnb.serviceAccount.create }}
+      serviceAccountName: {{ .Values.rfsimGnb.serviceAccount.name }}
+      {{- end }}
+      containers:
+      - name: pnf
+        image: "{{ .Values.rfsimGnb.nfimage.repository }}:{{ .Values.rfsimGnb.nfimage.version }}"
+        imagePullPolicy: {{ .Values.rfsimGnb.nfimage.pullPolicy }}
+        securityContext:
+          privileged: true
+        volumeMounts:
+          - mountPath: /opt/oai-gnb/etc
+            name: configuration
+        {{- if .Values.rfsimGnb.resources.define }}
+        resources:
+          requests:
+            cpu: {{ .Values.rfsimGnb.resources.requests.nf.cpu | quote }}
+            memory: {{ .Values.rfsimGnb.resources.requests.nf.memory | quote }}
+          limits:
+            cpu: {{ .Values.rfsimGnb.resources.limits.nf.cpu | quote }}
+            memory: {{ .Values.rfsimGnb.resources.limits.nf.memory | quote }}
+        {{- end }}
+        ports:
+        - containerPort: 36412
+          name: n2
+          protocol: SCTP
+        - containerPort: 2152
+          name: n3
+          protocol: UDP
+        command: [ "/bin/bash", "-c" ]
+        args:
+          - |
+            PNF_IP_ADDRESS=$(ip -f inet addr show eth0 | grep -o "inet [0-9\.]*" | awk '{print $2}');
+            VNF_IP_ADDRESS=$(getent hosts $VNF_HOST | awk '{print $1}');
+            VNF_IP_ADDRESS=$(if [[ $VNF_IP_ADDRESS ]]; then echo $VNF_IP_ADDRESS; else echo $VNF_HOST;fi);
+            sed -e s/@VNF_IP_ADDRESS@/$VNF_IP_ADDRESS/g \
+                -e s/@PNF_IP_ADDRESS@/$PNF_IP_ADDRESS/g \
+                /opt/oai-gnb/etc/du.conf | tee /tmp/du.conf;
+            exec /opt/oai-gnb/bin/nr-softmodem -O /tmp/du.conf $USE_ADDITIONAL_OPTIONS;
+        env:
+        - name: TZ
+          value: {{ .Values.rfsimGnb.config.timeZone }}
+        - name: USE_ADDITIONAL_OPTIONS
+          value: {{ .Values.rfsimGnb.config.useAdditionalOptions }}
+        - name: VNF_HOST
+          value: {{ .Values.rfsimGnb.config.nfapiServer.host | quote }}
+      volumes:
+        - name: configuration
+          configMap:
+            name: {{ .Release.Name }}-rfsim-gnb-configmap
+{{- end }}
+

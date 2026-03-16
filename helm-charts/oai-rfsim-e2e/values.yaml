@@ -1,0 +1,167 @@
+cn:
+  amf:
+    host: "192.168.8.82"
+  plmn:
+    mcc: "001"
+    mnc: "01"
+    tac: "1"
+  slice:
+    sst: "1"
+    sd: "16777215"
+    dnn: "oai"
+
+nfapiGnb:
+  enabled: true
+  nfimage:
+    repository: "bmw.ece.ntust.edu.tw/infidel/oai-gnb"
+    version: "nfapi"
+    pullPolicy: IfNotPresent
+
+  serviceAccount:
+    create: true
+    name: "oai-gnb-nfapi-sa"
+
+  multus:
+    nfapiInterface:
+      create: false
+      IPadd: ""
+      Netmask: "22"
+      hostInterface: "bond0"
+    n2Interface:
+      create: false
+      IPadd: ""
+      Netmask: ""
+      hostInterface: ""
+    n3Interface:
+      create: false
+      IPadd: ""
+      Netmask: ""
+      hostInterface: ""
+
+  config:
+    timeZone: "Europe/Paris"
+    useAdditionalOptions: "--nfapi VNF --log_config.global_log_options level,nocolor,time"
+    gnbName: "oai-gnb-nfapi"
+    n2IfName: "eth0"
+    n3IfName: "eth0"
+    nfapiIfName: "eth0"
+    # Used only when templates need an explicit IP; if empty we will resolve via DNS.
+    vnfHost: ""
+    pnfHost: "oai-rfsim-gnb-svc"
+
+  start:
+    gnb: true
+    tcpdump: false
+
+  resources:
+    define: false
+    limits:
+      nf:
+        cpu: "4"
+        memory: "8Gi"
+      tcpdump:
+        cpu: "100m"
+        memory: "128Mi"
+    requests:
+      nf:
+        cpu: "4"
+        memory: "8Gi"
+      tcpdump:
+        cpu: "100m"
+        memory: "128Mi"
+
+  nodeSelector: {}
+  tolerations: []
+
+rfsimGnb:
+  enabled: true
+  nfimage:
+    repository: "bmw.ece.ntust.edu.tw/infidel/oai-gnb"
+    version: "nfapi"
+    pullPolicy: IfNotPresent
+
+  serviceAccount:
+    create: true
+    name: "oai-gnb-rfsim-sa"
+
+  config:
+    timeZone: "Europe/Paris"
+    useAdditionalOptions: "--nfapi PNF --rfsim --log_config.global_log_options wall_clock --sa"
+    gnbName: "oai-gnb-rfsim"
+    n2IfName: "eth0"
+    n3IfName: "eth0"
+    nfapiServer:
+      host: "oai-nfapi-svc"
+      port: 2153
+
+  start:
+    gnb: true
+    tcpdump: false
+
+  resources:
+    define: false
+    limits:
+      nf:
+        cpu: "2"
+        memory: "4Gi"
+      tcpdump:
+        cpu: "100m"
+        memory: "128Mi"
+    requests:
+      nf:
+        cpu: "2"
+        memory: "4Gi"
+      tcpdump:
+        cpu: "100m"
+        memory: "128Mi"
+
+  nodeSelector: {}
+  tolerations: []
+
+nrUe:
+  enabled: true
+  nfimage:
+    repository: "docker.io/oaisoftwarealliance/oai-nr-ue"
+    version: "2024.w32"
+    pullPolicy: IfNotPresent
+
+  serviceAccount:
+    create: true
+    name: "oai-nr-ue-sa"
+
+  config:
+    timeZone: "Europe/Paris"
+    rfSimServer: "oai-rfsim-gnb-svc"
+    fullImsi: "001010000000100"
+    fullKey: "fec86ba6eb707ed08905757b1bb44b8f"
+    opc: "C42449363BBAD02B66D16BC975D77CC1"
+    dnn: "oai"
+    sst: "1"
+    sd: "16777215"
+    usrp: "rfsim"
+    useAdditionalOptions: "--sa --rfsim -r 106 --numerology 1 -C 3619200000 --log_config.global_log_options level,nocolor,time"
+
+  start:
+    nrue: true
+    tcpdump: false
+
+  resources:
+    define: false
+    limits:
+      nf:
+        cpu: "1500m"
+        memory: "1Gi"
+      tcpdump:
+        cpu: "200m"
+        memory: "128Mi"
+    requests:
+      nf:
+        cpu: "1500m"
+        memory: "1Gi"
+      tcpdump:
+        cpu: "100m"
+        memory: "128Mi"
+
+  nodeSelector: {}
+  tolerations: []
+

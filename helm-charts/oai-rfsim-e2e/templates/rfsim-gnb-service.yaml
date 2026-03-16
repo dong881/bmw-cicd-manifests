@@ -1,0 +1,22 @@
+{{- if .Values.rfsimGnb.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: oai-rfsim-gnb-svc
+  labels:
+    app: {{ .Release.Name }}-pnf
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ .Release.Name }}-pnf
+  ports:
+    - name: n3
+      port: 2152
+      targetPort: 2152
+      protocol: UDP
+    - name: n2
+      port: 36412
+      targetPort: 36412
+      protocol: SCTP
+{{- end }}
+

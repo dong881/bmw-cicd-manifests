@@ -1,0 +1,7 @@
+apiVersion: v2
+name: oai-rfsim-e2e
+description: OAI NFAPI + RFsim gNB + NR-UE end-to-end Helm chart targeting Open5GS
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+

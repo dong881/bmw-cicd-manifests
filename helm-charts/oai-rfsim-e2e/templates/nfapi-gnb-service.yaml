@@ -1,0 +1,18 @@
+{{- if .Values.nfapiGnb.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: oai-nfapi-svc
+  labels:
+    app: {{ .Release.Name }}-vnf
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ .Release.Name }}-vnf
+  ports:
+  - name: nfapi
+    port: 2153
+    targetPort: 2153
+    protocol: UDP
+{{- end }}
+

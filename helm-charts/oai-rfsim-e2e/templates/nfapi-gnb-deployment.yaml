@@ -1,0 +1,109 @@
+{{- if .Values.nfapiGnb.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-vnf
+  labels:
+    {{- include "oai-rfsim-e2e.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-vnf
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-vnf
+    {{- if .Values.nfapiGnb.multus.nfapiInterface.create }}
+      annotations:
+        k8s.v1.cni.cncf.io/networks: >-
+          [{
+                 "name": "{{ .Release.Name }}-nfapi",
+                 "interface": "nfapi",
+                 "ips": [{{- cat .Values.nfapiGnb.multus.nfapiInterface.IPadd "/" .Values.nfapiGnb.multus.nfapiInterface.Netmask | nospace | quote }}]
+          }]
+    {{- end }}
+    spec:
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+      {{- if .Values.nfapiGnb.serviceAccount.create }}
+      serviceAccountName: {{ .Values.nfapiGnb.serviceAccount.name }}
+      {{- end }}
+      containers:
+      - name: vnf
+        image: "{{ .Values.nfapiGnb.nfimage.repository }}:{{ .Values.nfapiGnb.nfimage.version }}"
+        imagePullPolicy: {{ .Values.nfapiGnb.nfimage.pullPolicy }}
+        securityContext:
+          privileged: true
+        volumeMounts:
+          - mountPath: /opt/oai-gnb/etc
+            name: configuration
+        {{- if .Values.nfapiGnb.resources.define }}
+        resources:
+          requests:
+            cpu: {{ .Values.nfapiGnb.resources.requests.nf.cpu | quote }}
+            memory: {{ .Values.nfapiGnb.resources.requests.nf.memory | quote }}
+          limits:
+            cpu: {{ .Values.nfapiGnb.resources.limits.nf.cpu | quote }}
+            memory: {{ .Values.nfapiGnb.resources.limits.nf.memory | quote }}
+        {{- end }}
+        ports:
+        - containerPort: 2153
+          name: nfapi
+          protocol: UDP
+        - containerPort: 36412
+          name: n2
+          protocol: SCTP
+        - containerPort: 2152
+          name: n3
+          protocol: UDP
+        command: [ "/bin/bash", "-c" ]
+        args:
+          - |
+            AMF_IP_ADDRESS=$(getent hosts $AMF_HOST | awk '{print $1}');
+            AMF_IP_ADDRESS=$(if [[ $AMF_IP_ADDRESS ]]; then echo $AMF_IP_ADDRESS; else echo $AMF_HOST;fi);
+            N2_IP_ADDRESS=$(ip -f inet addr show $N2_IF_NAME | grep -o "inet [0-9\.]*" | awk '{print $2}');
+            N3_IP_ADDRESS=$(ip -f inet addr show $N3_IF_NAME | grep -o "inet [0-9\.]*" | awk '{print $2}');
+            VNF_IP_ADDRESS=$(ip -f inet addr show $NFAPI_IF_NAME | grep -o "inet [0-9\.]*" | awk '{print $2}');
+            PNF_IP_ADDRESS=$(getent hosts $PNF_HOST | awk '{print $1}');
+            PNF_IP_ADDRESS=$(if [[ $PNF_IP_ADDRESS ]]; then echo $PNF_IP_ADDRESS; else echo $PNF_HOST;fi);
+            sed -e s/@N2_IP_ADDRESS@/$N2_IP_ADDRESS/g \
+                -e s/@N3_IP_ADDRESS@/$N3_IP_ADDRESS/g \
+                -e s/@VNF_IP_ADDRESS@/$VNF_IP_ADDRESS/g \
+                -e s/@PNF_IP_ADDRESS@/$PNF_IP_ADDRESS/g \
+                -e s/@AMF_IP_ADDRESS@/$AMF_IP_ADDRESS/g \
+                -e s/@MCC@/$MCC/g \
+                -e s/@MNC@/$MNC/g \
+                -e s/@SST@/$SST/g \
+                /opt/oai-gnb/etc/du.conf | tee /tmp/du.conf;
+            exec /opt/oai-gnb/bin/nr-softmodem -O /tmp/du.conf $USE_ADDITIONAL_OPTIONS;
+        env:
+        - name: TZ
+          value: {{ .Values.nfapiGnb.config.timeZone }}
+        - name: USE_ADDITIONAL_OPTIONS
+          value: {{ .Values.nfapiGnb.config.useAdditionalOptions }}
+        - name: AMF_HOST
+          value: {{ .Values.cn.amf.host }}
+        - name: N2_IF_NAME
+          value: {{ .Values.nfapiGnb.config.n2IfName }}
+        - name: N3_IF_NAME
+          value: {{ .Values.nfapiGnb.config.n3IfName }}
+        - name: NFAPI_IF_NAME
+          value: {{ .Values.nfapiGnb.config.nfapiIfName }}
+        - name: PNF_HOST
+          value: {{ .Values.nfapiGnb.config.pnfHost | quote }}
+        - name: MCC
+          value: {{ .Values.cn.plmn.mcc | quote }}
+        - name: MNC
+          value: {{ .Values.cn.plmn.mnc | quote }}
+        - name: SST
+          value: {{ .Values.cn.slice.sst | quote }}
+      volumes:
+        - name: configuration
+          configMap:
+            name: {{ .Release.Name }}-nfapi-gnb-configmap
+{{- end }}
+

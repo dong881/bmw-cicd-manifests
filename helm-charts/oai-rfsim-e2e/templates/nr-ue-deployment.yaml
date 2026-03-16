@@ -1,0 +1,79 @@
+{{- if .Values.nrUe.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-nr-ue
+  labels:
+    {{- include "oai-rfsim-e2e.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-nr-ue
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-nr-ue
+    spec:
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+      {{- if .Values.nrUe.serviceAccount.create }}
+      serviceAccountName: {{ .Values.nrUe.serviceAccount.name }}
+      {{- end }}
+      containers:
+      - name: nr-ue
+        image: "{{ .Values.nrUe.nfimage.repository }}:{{ .Values.nrUe.nfimage.version }}"
+        imagePullPolicy: {{ .Values.nrUe.nfimage.pullPolicy }}
+        securityContext:
+          capabilities:
+            add:
+              - NET_ADMIN
+              - NET_RAW
+              - SYS_NICE
+            drop:
+              - ALL
+        volumeMounts:
+          - mountPath: /opt/oai-nr-ue/etc
+            name: configuration
+          - name: dev-net-tun
+            mountPath: /dev/net/tun
+        {{- if .Values.nrUe.resources.define }}
+        resources:
+          requests:
+            cpu: {{ .Values.nrUe.resources.requests.nf.cpu | quote }}
+            memory: {{ .Values.nrUe.resources.requests.nf.memory | quote }}
+          limits:
+            cpu: {{ .Values.nrUe.resources.limits.nf.cpu | quote }}
+            memory: {{ .Values.nrUe.resources.limits.nf.memory | quote }}
+        {{- end }}
+        command: [ "/bin/bash", "-c" ]
+        args:
+          - |
+            RFSIM_IP_ADDRESS=$(getent hosts $RFSIM_HOST | awk '{print $1}');
+            RFSIM_IP_ADDRESS=$(if [[ $RFSIM_IP_ADDRESS ]]; then echo $RFSIM_IP_ADDRESS; else echo $RFSIM_HOST;fi);
+            if [[ "$USRP_TYPE" == "rfsim" ]]; then
+              exec /opt/oai-nr-ue/bin/nr-uesoftmodem -O /opt/oai-nr-ue/etc/nr-ue.conf $USE_ADDITIONAL_OPTIONS --rfsimulator.serveraddr $RFSIM_IP_ADDRESS;
+            else
+              exec /opt/oai-nr-ue/bin/nr-uesoftmodem -O /opt/oai-nr-ue/etc/nr-ue.conf $USE_ADDITIONAL_OPTIONS;
+            fi
+        env:
+          - name: TZ
+            value: {{ .Values.nrUe.config.timeZone }}
+          - name: RFSIM_HOST
+            value: {{ .Values.nrUe.config.rfSimServer }}
+          - name: USE_ADDITIONAL_OPTIONS
+            value: {{ .Values.nrUe.config.useAdditionalOptions }}
+          - name: USRP_TYPE
+            value: {{ .Values.nrUe.config.usrp }}
+      volumes:
+        - name: configuration
+          configMap:
+            name: {{ .Release.Name }}-nr-ue-configmap
+        - name: dev-net-tun
+          hostPath:
+            path: /dev/net/tun
+{{- end }}
+

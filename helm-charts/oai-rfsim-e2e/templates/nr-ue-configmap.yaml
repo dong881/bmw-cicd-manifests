@@ -1,0 +1,17 @@
+{{- if .Values.nrUe.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-nr-ue-configmap
+data:
+  nr-ue.conf: |
+    uicc0 = {
+      imsi = "{{ .Values.nrUe.config.fullImsi }}";
+      key = "{{ .Values.nrUe.config.fullKey }}";
+      opc = "{{ .Values.nrUe.config.opc }}";
+      dnn = "{{ .Values.nrUe.config.dnn }}";
+      nssai_sst = "{{ .Values.nrUe.config.sst }}";
+      nssai_sd = "{{ .Values.nrUe.config.sd }}";
+    }
+{{- end }}
+
