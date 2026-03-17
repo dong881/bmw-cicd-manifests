@@ -118,6 +118,8 @@ spec:
         env:
           - name: TZ
             value: {{ .Values.config.timeZone }}
+          - name: NFAPI_TRACE_LEVEL
+            value: "info"
           - name: USE_ADDITIONAL_OPTIONS
             value: {{ .Values.config.useAdditionalOptions }}
           - name: OAI_GDBSTACKS
