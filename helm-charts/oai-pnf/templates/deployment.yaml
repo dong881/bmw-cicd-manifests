@@ -16,14 +16,27 @@ spec:
       labels:
         {{- include "oai-pnf.selectorLabels" . | nindent 8 }}
         app: oai-pnf
-    {{- if .Values.multus.f1Interface.create }}
+    {{- if or .Values.multus.nfapiInterface.create .Values.multus.ruInterface.create }}
       annotations:
-        k8s.v1.cni.cncf.io/networks: >-
-          [{
-                 "name": "{{ .Chart.Name }}-wa",
-                 "interface": "nfapi",
-                 "ips": [{{- cat .Values.multus.f1Interface.IPadd "/" .Values.multus.f1Interface.Netmask | nospace | quote }}]
-          }
+        cpu-quota.crio.io: "disable"
+        k8s.v1.cni.cncf.io/networks: |
+          [
+          {{- if .Values.multus.nfapiInterface.create }}
+            {
+              "name": "{{ .Chart.Name }}-nfapi",
+              "interface": "nfapi"
+            }{{ if .Values.multus.ruInterface.create }},{{ end }}
+          {{- end }}
+          {{- if .Values.multus.ruInterface.create }}
+            {
+              "name": "{{ .Chart.Name }}-ru-uplane",
+              "mac": "{{ .Values.multus.ruInterface.uPlaneMacAdd }}"
+            },
+            {
+              "name": "{{ .Chart.Name }}-ru-cplane",
+              "mac": "{{ .Values.multus.ruInterface.cPlaneMacAdd }}"
+            }
+          {{- end }}
           ]
     {{- end }}
     spec:
@@ -59,6 +72,12 @@ spec:
           protocol: SCTP
         - containerPort:  {{ .Values.config.f1cuPort }}
           name: f1
+          protocol: UDP
+        - containerPort: 50000
+          name: nfapi-p5
+          protocol: SCTP
+        - containerPort: 50010
+          name: nfapi-p7
           protocol: UDP
         {{- if or .Values.start.vnf .Values.start.pnf }}
         command: [ "/bin/bash", "-c" ]

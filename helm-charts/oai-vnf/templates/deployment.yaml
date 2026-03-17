@@ -16,33 +16,33 @@ spec:
       labels:
         {{- include "oai-vnf.selectorLabels" . | nindent 8 }}
         app: oai-vnf
-    {{- if .Values.multus.f1Interface.create }}
       annotations:
-        k8s.v1.cni.cncf.io/networks: >-
-          [{
-                 "name": "{{ .Chart.Name }}-wa",
-                 "interface": "nfapi",
-                 "ips": [{{- cat .Values.multus.f1Interface.IPadd "/" .Values.multus.f1Interface.Netmask | nospace | quote }}]
-                  {{- if .Values.multus.defaultGateway }}
-                 ,"default-route": ["{{ .Values.multus.defaultGateway }}"]
-                  {{- end }}
-          }
-          {{- if .Values.multus.n3Interface.create }}
-          ,{
-                 "name": "{{ .Chart.Name }}-wa",
-                 "interface": "n3",
-                 "ips": [{{- cat .Values.multus.n3Interface.IPadd "/" .Values.multus.n3Interface.Netmask | nospace | quote }}]
-          }
-          {{- end }}
+        cpu-quota.crio.io: "disable"
+        k8s.v1.cni.cncf.io/networks: |
+          [
           {{- if .Values.multus.n2Interface.create }}
-          ,{
-                 "name": "{{ .Chart.Name }}-wa",
-                 "interface": "n2",
-                 "ips": [{{- cat .Values.multus.n2Interface.IPadd "/" .Values.multus.n3Interface.Netmask | nospace | quote }}]
-          }
+            {
+              "name": "{{ .Chart.Name }}-n2",
+              "interface": "n2"{{- if .Values.multus.defaultGateway }}, 
+              "default-route": ["{{ .Values.multus.defaultGateway }}"]{{- end }}
+            }
+            {{ if .Values.multus.n3Interface.create }},{{ end }}
+          {{- end }}
+          {{- if .Values.multus.n3Interface.create }}
+            {
+              "name": "{{ .Chart.Name }}-n3",
+              "interface": "n3"{{- if .Values.multus.defaultGateway }}, 
+              "default-route": ["{{ .Values.multus.defaultGateway }}"]{{- end }}
+            }
+            {{ if .Values.multus.nfapiInterface.create }},{{ end }}
+          {{- end }}
+          {{- if .Values.multus.nfapiInterface.create }}
+            {
+              "name": "{{ .Chart.Name }}-nfapi",
+              "interface": "nfapi"
+            }
           {{- end }}
           ]
-    {{- end }}
     spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
@@ -76,6 +76,12 @@ spec:
           protocol: SCTP
         - containerPort:  {{ .Values.config.f1cuPort }}
           name: f1
+          protocol: UDP
+        - containerPort: 50001
+          name: nfapi-p5
+          protocol: SCTP
+        - containerPort: 50011
+          name: nfapi-p7
           protocol: UDP
         {{- if .Values.start.vnf}}
         command: [ "/bin/bash", "-c" ]

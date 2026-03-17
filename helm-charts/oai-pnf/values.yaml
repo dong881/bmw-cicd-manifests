@@ -5,14 +5,14 @@ kubernetesType: Vanilla  #Vanilla for community kubernetes distribution else Ope
 nfimage:   # image name either locally present or in a public/private repository
   #repository: docker.io/oaisoftwarealliance/oai-gnb           ## dockerhub oaisoftwarealliance/oai-gnb  
   #version: 2023.w49 # image tag or develop
-  repository: quay.bmw.lab/infidel/oai-gnb
-  version: latest # image tag or develop
+  repository: bmw.ece.ntust.edu.tw/infidel/oai-gnb
+  version: nfapi-rfsim-latest # image tag or develop
   # pullPolicy: IfNotPresent or Never or Always
   pullPolicy: Always
 
 ## good to use when pulling images from docker-hub mention 
-imagePullSecrets:
-  - name: "regcred"
+# imagePullSecrets:
+#   - name: "regcred"
 
 serviceAccount:
   # Specifies whether a service account should be created
@@ -23,44 +23,35 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: "oai-pnf-sa"
 
-# oai-pnf can be configured with multiple interface which may correspond to 3GPP logical interfaces. There can be one to one or one to many. 
-# In case of one to one mapping f1, n2, n3 all can have seperate virtual interfaces. 
-# In one to many mapping f1,n2 and n3 all can be mapped to one virtual interface. 
-# Interface mapping is strictly based on your networking environment 
-## Change these ip-addresses according to your environment 
+# These helm-charts can be used for two purpose
+# 1. RFSimulated oai-gNB: Only requires 1 interface for N2 and N3. You can use Kubernetes default interface eth0
+# 2. Physical gNB with Ethernet based USRP or RRU: You need to use ruInterface to connect with RU. Make sure that the ip-address you choose can reach to RU.
+#                                                 Using a dedicated interface for N2 or N3 is optional you can still use eth0.
+# 3. Another thing you can chose to use same virtual interface for N2/N3 its optional to have two different
+
+## NOTE: To use these charts with USRP B210 you need to modify and mount usb from the host.
+## Change these ip-addresses according to your environment
+
 multus:
-  # if default gatway is empty then it will be removed
-  defaultGateway: ""
-  f1Interface:
+  nfapiInterface:
     create: true
-    IPadd: "192.168.120.82"
-    Netmask: "24"
-    # #name inside the pod is hardcoded right now
-    # name: "f1"
-    # if gatway is commented then it will be removed
-    #Gateway: "172.21.19.254"
-    #routes: 
-    hostInterface: "enp1s0"      # Interface of the host machine on which this pod will be scheduled
-  n2Interface:
-    create: true
-    IPadd: "172.21.6.90"
-    #name inside the pod is hardcoded right now
-    # name: "n2"
-    Netmask: "22"
-    # if gatway is empty then it will be removed
-    #Gateway: "172.21.7.254"
-    #routes: [{'dst': '10.8.0.0/24','gw': '172.21.7.254'}, {'dst': '10.9.0.0/24','gw': '172.21.7.254'}]
-    hostInterface: "enp1s0"      # Interface of the host machine on which this pod will be scheduled
-  n3Interface:
-    create: true
-    IPadd: "172.21.8.91"
-    Netmask: "22"
+    IPadd: "10.21.8.100"
     # #name inside the pod is hardcoded right now
     # name: "n3"
-    # if gatway is commented then it will be removed
+    Netmask: "22"
+    # if gatway is empty then it will be removed
     #Gateway: "172.21.11.254"
-    #routes: 
-    hostInterface: "enp1s0"      # Interface of the host machine on which this pod will be scheduled
+    #routes:
+    hostInterface: "eno1"      # Interface of the host machine on which this pod will be scheduled
+  ruInterface:            #Only needed if using a ethernet based RU/USRP
+    create: false
+    mtu: 9216
+    vlan: 103 #LiteON New 6 LiteON Old, 4
+    cPlaneMacAdd: 00:11:22:33:44:66  #vvdn 76:76:64:6e:00:01 #benetel 00:11:22:33:44:67
+    uPlaneMacAdd: 00:11:22:33:44:66 #vvdn 76:76:64:6e:00:02 #benetel 00:11:22:33:44:66
+    sriovNetworkNamespace: sriov-network-operator
+    sriovResourceNameCplane: pci_sriov_net_fh_cp
+    sriovResourceNameUplane: pci_sriov_net_fh_up
 
 ## If you want to change more configuration parameters then you should mount the config file  
 # in templates/configmap.yaml
@@ -70,7 +61,7 @@ config:
   timeZone: "Europe/Paris"
   #useAdditionalOptions: "--nfapi PNF --rfsim --rfsimulator.serveraddr server --phy-test"
   #useAdditionalOptions: "--sa --rfsim --nfapi PNF" 
-  useAdditionalOptions: "--nfapi PNF --rfsim --rfsimulator.serveraddr server --log\_config.global\_log\_options wall\_clock --sa"
+  useAdditionalOptions: "--nfapi PNF --rfsim --rfsimulator.serveraddr server --log_config.global_log_options level,nocolor,time"
   #useAdditionalOptions: "--gNBs.[0].min_rxtxtime 6 --continuous-tx --nfapi PNF"
 
   # If mounting the configuration file then below parameters are not used
@@ -80,9 +71,9 @@ config:
   tac: "1"     # check the information with AMF
   sst: "1"  #currently only 4 standard values are allowed 1,2,3,4
   amfhost: "oai-amf"  # amf ip-address or service-name oai-amf-svc or 172.21.6.94
-  n2IfName: "n2"    # if multus.n2Interface.create is true then use n2
-  n3IfName: "n3"   #if multus.n3Interface.create is true then use n3 or you can only use 1 interface n2 or eth0 
-  f1IfName: "f1"   #if multus.f1Interface.create is true then use multus.f1Interface.Ipadd
+  n2IfName: "eth0"    # if multus.n2Interface.create is true then use n2
+  n3IfName: "eth0"   #if multus.n3Interface.create is true then use n3 or you can only use 1 interface n2 or eth0 
+  f1IfName: "eth0"   #if multus.f1Interface.create is true then use multus.f1Interface.Ipadd
   vnfIfName: "nfapi"   #if multus.f1Interface.create is true then use multus.f1Interface.Ipadd
   pnfIfName: "f1"   #if multus.f1Interface.create is true then use multus.f1Interface.Ipadd
   f1cuPort: "2153"   #2153 if using same interface for f1 and n3 else standard port 2152 should be use if f1 and n3 interface are different
@@ -142,7 +133,6 @@ affinity: {}
 
 terminationGracePeriodSeconds: 5
 
-nodeSelector:
-  kubernetes.io/hostname: worker-kvm-02-01
+nodeSelector: {}
 
 nodeName: 

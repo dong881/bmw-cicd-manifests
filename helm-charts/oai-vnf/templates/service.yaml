@@ -20,5 +20,13 @@ spec:
       port: 2153
       targetPort: 2153
       protocol: UDP
+    - name: nfapi-p5
+      port: 50001
+      targetPort: 50001
+      protocol: SCTP
+    - name: nfapi-p7
+      port: 50011
+      targetPort: 50011
+      protocol: UDP
   selector:
     {{- include "oai-vnf.selectorLabels" . | nindent 4 }}

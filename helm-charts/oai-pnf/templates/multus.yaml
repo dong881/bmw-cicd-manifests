@@ -1,15 +1,54 @@
+{{- if .Values.multus.ruInterface.create }}
 ---
 apiVersion: "k8s.cni.cncf.io/v1"
-kind: NetworkAttachmentDefinition 
+kind: NetworkAttachmentDefinition
 metadata:
-  name: {{ .Chart.Name }}-wa
+  name: {{ .Chart.Name }}-ru-cplane
+  annotations:
+    k8s.v1.cni.cncf.io/resourceName: intel.com/{{ .Values.multus.ruInterface.sriovResourceNameCplane }}
 spec:
-  config: '{ 
+  config: '{
+      "cniVersion": "0.3.1",
+      "type": "sriov",
+      "vlan": {{ .Values.multus.ruInterface.vlan }},
+      "spoofchk": "off",
+      "trust": "on"
+    }'
+---
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: {{ .Chart.Name }}-ru-uplane
+  annotations:
+    k8s.v1.cni.cncf.io/resourceName: intel.com/{{ .Values.multus.ruInterface.sriovResourceNameUplane }}
+spec:
+  config: '{
+      "cniVersion": "0.3.1",
+      "type": "sriov",
+      "vlan": {{ .Values.multus.ruInterface.vlan }},
+      "spoofchk": "off",
+      "trust": "on"
+    }'
+{{- end }}
+---
+{{- if .Values.multus.nfapiInterface.create }}
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: {{ .Chart.Name }}-nfapi
+spec:
+  config: '{
       "cniVersion": "0.3.1",
       "type": "macvlan",
-      "master": {{- cat .Values.multus.f1Interface.hostInterface | nospace | quote }},
+      "master": {{- cat .Values.multus.nfapiInterface.hostInterface | nospace | quote }},
       "mode": "bridge",
       "ipam": {
-        "type": "whereabouts"
+        "type": "static",
+        "addresses": [
+                {
+                        "address": {{- cat .Values.multus.nfapiInterface.IPadd "/" .Values.multus.nfapiInterface.Netmask | nospace | quote }}
+                }
+        ]
       }
     }'
+{{- end }}
