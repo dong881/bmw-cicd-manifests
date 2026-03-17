@@ -28,5 +28,9 @@ spec:
       port: 50010
       targetPort: 50010
       protocol: UDP
+    - name: rfsim
+      port: 4043
+      targetPort: 4043
+      protocol: TCP
   selector:
     {{- include "oai-pnf.selectorLabels" . | nindent 4 }}

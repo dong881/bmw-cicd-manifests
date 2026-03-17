@@ -59,8 +59,21 @@ spec:
         {{- if .Values.start.nrue}}
         command: [ "/bin/bash", "-c" ]
         args:
-          - RFSIM_IP_ADDRESS=$(getent hosts $RFSIM_HOST | awk '{print $1}');
-            RFSIM_IP_ADDRESS=$(if [[ $RFSIM_IP_ADDRESS ]]; then echo $RFSIM_IP_ADDRESS; else echo $RFSIM_HOST;fi);
+          - |
+            # Resolve RFsim server to a numeric IP (nr-uesoftmodem does not reliably resolve hostnames)
+            RFSIM_IP_ADDRESS="";
+            for i in $(seq 1 60); do
+              RFSIM_IP_ADDRESS=$(getent hosts "$RFSIM_HOST" | awk 'NR==1{print $1}');
+              if [[ -n "$RFSIM_IP_ADDRESS" ]]; then
+                break;
+              fi;
+              echo "Waiting for DNS for RFSIM_HOST=$RFSIM_HOST ($i/60)";
+              sleep 1;
+            done;
+            if [[ -z "$RFSIM_IP_ADDRESS" ]]; then
+              echo "ERROR: could not resolve RFSIM_HOST=$RFSIM_HOST to an IP after 60s";
+              exit 1;
+            fi;
             {{- if eq .Values.config.usrp "b2xx"}}
               /opt/oai-gnb/bin/uhd_images_downloader.py -t b2xx;
             {{- else if eq .Values.config.usrp "n3xx" }}
