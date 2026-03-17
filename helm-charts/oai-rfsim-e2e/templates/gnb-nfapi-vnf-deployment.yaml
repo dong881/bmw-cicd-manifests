@@ -19,12 +19,14 @@ spec:
         app: gnb-nfapi-vnf
     {{- if .Values.gnbNfapiVnf.multus.nfapiInterface.create }}
       annotations:
-        k8s.v1.cni.cncf.io/networks: >-
-          [{
-                 "name": "{{ .Release.Name }}-nfapi",
-                 "interface": "nfapi",
-                 "ips": [{{- cat .Values.gnbNfapiVnf.multus.nfapiInterface.IPadd "/" .Values.gnbNfapiVnf.multus.nfapiInterface.Netmask | nospace | quote }}]
-          }]
+        cpu-quota.crio.io: "disable"
+        k8s.v1.cni.cncf.io/networks: |
+          [
+            {
+              "name": "{{ .Release.Name }}-nfapi",
+              "interface": "nfapi"
+            }
+          ]
     {{- end }}
     spec:
       securityContext:
@@ -52,14 +54,20 @@ spec:
             memory: {{ .Values.gnbNfapiVnf.resources.limits.nf.memory | quote }}
         {{- end }}
         ports:
-        - containerPort: 2153
-          name: nfapi
-          protocol: UDP
         - containerPort: 36412
           name: n2
           protocol: SCTP
         - containerPort: 2152
           name: n3
+          protocol: UDP
+        - containerPort: 4043
+          name: rfsim
+          protocol: TCP
+        - containerPort: 50001
+          name: nfapi-p5
+          protocol: SCTP
+        - containerPort: 50011
+          name: nfapi-p7
           protocol: UDP
         command: [ "/bin/bash", "-c" ]
         args:
@@ -95,7 +103,7 @@ spec:
         - name: N3_IF_NAME
           value: {{ .Values.gnbNfapiVnf.config.n3IfName }}
         - name: NFAPI_IF_NAME
-          value: {{ .Values.gnbNfapiVnf.config.nfapiIfName }}
+          value: {{ ternary "nfapi" .Values.gnbNfapiVnf.config.nfapiIfName .Values.gnbNfapiVnf.multus.nfapiInterface.create | quote }}
         - name: PNF_HOST
           value: {{ .Values.gnbNfapiVnf.config.pnfHost | quote }}
         - name: MCC

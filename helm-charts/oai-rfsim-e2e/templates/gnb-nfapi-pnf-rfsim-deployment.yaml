@@ -52,6 +52,12 @@ spec:
         - containerPort: 4043
           name: rfsim
           protocol: TCP
+        - containerPort: 50000
+          name: nfapi-p5
+          protocol: SCTP
+        - containerPort: 50010
+          name: nfapi-p7
+          protocol: UDP
         command: [ "/bin/bash", "-c" ]
         args:
           - |
