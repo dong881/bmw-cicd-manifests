@@ -109,10 +109,10 @@ Make sure the gNB is running in split mode or non-split mode.
 helm install oai-nr-ue .
 ```
 
-## BMW lab flow: UE attach to PNF (NFAPI) and validate ping/iperf to CN
+## BMW lab flow (worker-rt): UE attach to PNF (NFAPI) and validate CN↔UE ping/iperf
 
 This section is tailored for the BMW manifests in this repo:
-- RAN PNF/VNF are deployed in namespace `oai`
+- RAN PNF/VNF/UE are deployed in namespace `oai-ran`
 - OAI CN is deployed in namespace `oai-cn`
 - UE uses RFSim and connects to the PNF Service name (default `config.rfSimServer: "oai-pnf"`)
 
@@ -132,7 +132,7 @@ Quick checks:
 
 ```bash
 export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
-kubectl get pods -n oai -o wide
+kubectl get pods -n oai-ran -o wide
 kubectl get pods -n oai-cn -o wide
 kubectl get svc -n oai-cn oai-amf-ngap -o wide || true
 ```
@@ -144,9 +144,9 @@ From `bmw-cicd-manifests/helm-charts/`:
 ```bash
 export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
 
-helm upgrade --install oai-nr-ue ./oai-nr-ue -n oai -f ./oai-nr-ue/values.yaml
-kubectl rollout status -n oai deploy/oai-nr-ue
-kubectl get pods -n oai -o wide | grep oai-nr-ue
+helm upgrade --install oai-nr-ue ./oai-nr-ue -n oai-ran -f ./oai-nr-ue/values.yaml
+kubectl rollout status -n oai-ran deploy/oai-nr-ue
+kubectl get pods -n oai-ran -o wide | grep oai-nr-ue
 ```
 
 ### 3) Verify UE attaches to the PNF
@@ -155,16 +155,16 @@ Check UE logs for RFSim/attach progression (exact strings vary by image/version)
 
 ```bash
 export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
-kubectl logs -n oai deploy/oai-nr-ue --tail=400
+kubectl logs -n oai-ran deploy/oai-nr-ue --tail=400
 ```
 
 You can also confirm the UE created the tunnel interface (usually `oaitun_ue1`) inside the pod:
 
 ```bash
 export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
-UE_POD="$(kubectl get pod -n oai -l app.kubernetes.io/name=oai-nr-ue -o jsonpath='{.items[0].metadata.name}')"
-kubectl exec -n oai "$UE_POD" -- ip -br addr
-kubectl exec -n oai "$UE_POD" -- ip link show oaitun_ue1 || true
+UE_POD="$(kubectl get pod -n oai-ran -l app.kubernetes.io/name=oai-nr-ue -o jsonpath='{.items[0].metadata.name}')"
+kubectl exec -n oai-ran "$UE_POD" -- ip -br addr
+kubectl exec -n oai-ran "$UE_POD" -- ip link show oaitun_ue1 || true
 ```
 
 ### 4) Validate data plane (ping)
@@ -175,37 +175,62 @@ Examples (adjust IPs to your CN/UPF setup):
 
 ```bash
 export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
-UE_POD="$(kubectl get pod -n oai -l app.kubernetes.io/name=oai-nr-ue -o jsonpath='{.items[0].metadata.name}')"
+UE_POD="$(kubectl get pod -n oai-ran -l app.kubernetes.io/name=oai-nr-ue -o jsonpath='{.items[0].metadata.name}')"
 
 # Example: ping UPF / N6 side gateway used in many OAI examples
-kubectl exec -n oai "$UE_POD" -- ping -I oaitun_ue1 -c 3 12.1.1.1 || true
+kubectl exec -n oai-ran "$UE_POD" -- ping -I oaitun_ue1 -c 3 12.1.1.1 || true
 
 # Example: internet reachability (requires DN/NAT configured)
-kubectl exec -n oai "$UE_POD" -- ping -I oaitun_ue1 -c 3 8.8.8.8 || true
+kubectl exec -n oai-ran "$UE_POD" -- ping -I oaitun_ue1 -c 3 8.8.8.8 || true
 ```
 
 ### 5) Validate throughput (iperf3)
 
+There are two practical options:
+
+#### Option A (UE → DN): run iperf3 client from UE
+
 You need an iperf3 server reachable from the UE data network (behind the UPF).
-Common options:
-- Use an existing DN (if your lab provides one) and run `iperf3 -s` there
-- Or deploy an iperf3 server as part of your DN/traffic steering setup
 
 From the UE pod:
 
 ```bash
 export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
-UE_POD="$(kubectl get pod -n oai -l app.kubernetes.io/name=oai-nr-ue -o jsonpath='{.items[0].metadata.name}')"
+UE_POD="$(kubectl get pod -n oai-ran -l app.kubernetes.io/name=oai-nr-ue -o jsonpath='{.items[0].metadata.name}')"
 
 # Replace <IPERF_SERVER_IP> with the server reachable through UPF
-kubectl exec -n oai "$UE_POD" -- iperf3 -c <IPERF_SERVER_IP> -t 10 -i 1 || true
+kubectl exec -n oai-ran "$UE_POD" -- iperf3 -c <IPERF_SERVER_IP> -t 10 -i 1 || true
+```
+
+#### Option B (CN → UE): run iperf3 client from UPF pod to UE
+
+This is convenient in the worker-rt lab because the `oai-upf` pod includes a `tcpdump` sidecar with `iperf3`.
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+UE_POD="$(kubectl get pod -n oai-ran -l app.kubernetes.io/name=oai-nr-ue -o jsonpath='{.items[0].metadata.name}')"
+
+# Start iperf3 server on UE tunnel IP
+kubectl exec -n oai-ran "$UE_POD" -- sh -lc 'pkill iperf3 2>/dev/null || true; nohup iperf3 -s -B 12.1.1.100 -p 5201 >/tmp/iperf3-server.log 2>&1 & sleep 1; ss -lntp | grep 5201'
+
+# CN → UE iperf3 (run from UPF pod)
+kubectl exec -n oai-cn deploy/oai-upf -c tcpdump -- iperf3 -c 12.1.1.100 -p 5201 -t 10 -P 1
+```
+
+If you see `unknown TEID ... Dropping!` in `oai-vnf` while ping/iperf fails, restart UPF + UE to clear stale session state:
+
+```bash
+kubectl -n oai-cn  rollout restart deploy/oai-upf
+kubectl -n oai-cn  rollout status  deploy/oai-upf
+kubectl -n oai-ran rollout restart deploy/oai-nr-ue
+kubectl -n oai-ran rollout status  deploy/oai-nr-ue
 ```
 
 ### Uninstall
 
 ```bash
 export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
-helm uninstall oai-nr-ue -n oai
+helm uninstall oai-nr-ue -n oai-ran
 ```
 
 ## Note
