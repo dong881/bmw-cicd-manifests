@@ -78,8 +78,8 @@ config:
   pnfIfName: "f1"   #if multus.f1Interface.create is true then use multus.f1Interface.Ipadd
   f1cuPort: "2153"   #2153 if using same interface for f1 and n3 else standard port 2152 should be use if f1 and n3 interface are different
   f1duPort: "2153"   #2153 if using same interface for f1 and n3 else standard port 2152 should be use if f1 and n3 interface are different # Debugging section
-  pnfHost: "192.168.120.82"
-  vnfHost: "192.168.120.81"
+  pnfHost: "10.21.8.100"
+  vnfHost: "10.21.8.99"
 
 podSecurityContext:
   runAsUser: 0
