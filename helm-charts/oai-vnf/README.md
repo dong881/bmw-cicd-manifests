@@ -153,3 +153,93 @@ ping -I oaitun_ue1 8.8.8.8
 ## Note
 
 1. If you are using multus then make sure it is properly configured and if you don't have a gateway for your multus interface then avoid using gateway and defaultGateway parameter. Either comment them or leave them empty. Wrong gateway configuration can create issues with pod networking and pod will not be able to resolve service names.
+
+## BMW / NFAPI (VNF) quickstart (install / upgrade / uninstall)
+
+This repo uses:
+- Multus macvlan interface `nfapi` (static IP) for NFAPI traffic
+- NFAPI ports (VNF): **P5 = 50001/SCTP**, **P7 = 50011/UDP**
+- AMF NGAP in `oai-cn` exposed via an additional Service **`oai-amf-ngap` (38412/SCTP)** (see below)
+
+### Prerequisites
+
+- Multus is installed on the cluster
+- The `multus.nfapiInterface.hostInterface` exists on the worker node (example on `worker-rt`: `eno1`)
+- OAI CN is running in namespace `oai-cn`
+- You have a working kubeconfig. For the `worker-rt` lab cluster used in this repo:
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+```
+
+### (Required) expose AMF NGAP/SCTP in `oai-cn`
+
+The upstream `oai-amf` Service often exposes only HTTP/HTTP2 (SBI). For RAN registration you also need NGAP over SCTP **38412**.
+
+Create it once:
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Service
+metadata:
+  name: oai-amf-ngap
+  namespace: oai-cn
+spec:
+  type: ClusterIP
+  ports:
+    - name: ngap
+      port: 38412
+      targetPort: 38412
+      protocol: SCTP
+  selector:
+    app.kubernetes.io/instance: oai-cn
+    app.kubernetes.io/name: oai-amf
+EOF
+
+kubectl describe svc -n oai-cn oai-amf-ngap
+```
+
+### Install
+
+From `bmw-cicd-manifests/helm-charts/`:
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+
+helm upgrade --install oai-vnf ./oai-vnf -n oai --create-namespace -f ./oai-vnf/values.yaml
+kubectl rollout status -n oai deploy/oai-vnf
+kubectl get pods -n oai -o wide
+kubectl get svc -n oai oai-vnf -o wide
+```
+
+### Upgrade (apply changes)
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+helm upgrade oai-vnf ./oai-vnf -n oai -f ./oai-vnf/values.yaml
+kubectl rollout restart -n oai deploy/oai-vnf
+kubectl rollout status -n oai deploy/oai-vnf
+```
+
+### Uninstall
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+helm uninstall oai-vnf -n oai
+
+# optional cleanup for the AMF NGAP Service
+kubectl delete svc -n oai-cn oai-amf-ngap --ignore-not-found
+```
+
+### Verify registration to AMF
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+kubectl logs -n oai deploy/oai-vnf --tail=400 | grep -E 'NGAP_REGISTER_GNB_CNF|associated AMF' || true
+```
+
+Expected example:
+- `Received NGAP_REGISTER_GNB_CNF: associated AMF 1`

@@ -109,6 +109,105 @@ Make sure the gNB is running in split mode or non-split mode.
 helm install oai-nr-ue .
 ```
 
+## BMW lab flow: UE attach to PNF (NFAPI) and validate ping/iperf to CN
+
+This section is tailored for the BMW manifests in this repo:
+- RAN PNF/VNF are deployed in namespace `oai`
+- OAI CN is deployed in namespace `oai-cn`
+- UE uses RFSim and connects to the PNF Service name (default `config.rfSimServer: "oai-pnf"`)
+
+### 0) Set kubeconfig
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+```
+
+### 1) Prerequisites
+
+- `oai-pnf` and `oai-vnf` are Running in namespace `oai`
+- OAI CN is Running in namespace `oai-cn`
+- (Recommended) AMF NGAP Service exists: `oai-amf-ngap` in `oai-cn` exposing `38412/SCTP`
+
+Quick checks:
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+kubectl get pods -n oai -o wide
+kubectl get pods -n oai-cn -o wide
+kubectl get svc -n oai-cn oai-amf-ngap -o wide || true
+```
+
+### 2) Install / upgrade UE
+
+From `bmw-cicd-manifests/helm-charts/`:
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+
+helm upgrade --install oai-nr-ue ./oai-nr-ue -n oai -f ./oai-nr-ue/values.yaml
+kubectl rollout status -n oai deploy/oai-nr-ue
+kubectl get pods -n oai -o wide | grep oai-nr-ue
+```
+
+### 3) Verify UE attaches to the PNF
+
+Check UE logs for RFSim/attach progression (exact strings vary by image/version):
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+kubectl logs -n oai deploy/oai-nr-ue --tail=400
+```
+
+You can also confirm the UE created the tunnel interface (usually `oaitun_ue1`) inside the pod:
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+UE_POD="$(kubectl get pod -n oai -l app.kubernetes.io/name=oai-nr-ue -o jsonpath='{.items[0].metadata.name}')"
+kubectl exec -n oai "$UE_POD" -- ip -br addr
+kubectl exec -n oai "$UE_POD" -- ip link show oaitun_ue1 || true
+```
+
+### 4) Validate data plane (ping)
+
+Once `oaitun_ue1` exists, run pings through it.
+
+Examples (adjust IPs to your CN/UPF setup):
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+UE_POD="$(kubectl get pod -n oai -l app.kubernetes.io/name=oai-nr-ue -o jsonpath='{.items[0].metadata.name}')"
+
+# Example: ping UPF / N6 side gateway used in many OAI examples
+kubectl exec -n oai "$UE_POD" -- ping -I oaitun_ue1 -c 3 12.1.1.1 || true
+
+# Example: internet reachability (requires DN/NAT configured)
+kubectl exec -n oai "$UE_POD" -- ping -I oaitun_ue1 -c 3 8.8.8.8 || true
+```
+
+### 5) Validate throughput (iperf3)
+
+You need an iperf3 server reachable from the UE data network (behind the UPF).
+Common options:
+- Use an existing DN (if your lab provides one) and run `iperf3 -s` there
+- Or deploy an iperf3 server as part of your DN/traffic steering setup
+
+From the UE pod:
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+UE_POD="$(kubectl get pod -n oai -l app.kubernetes.io/name=oai-nr-ue -o jsonpath='{.items[0].metadata.name}')"
+
+# Replace <IPERF_SERVER_IP> with the server reachable through UPF
+kubectl exec -n oai "$UE_POD" -- iperf3 -c <IPERF_SERVER_IP> -t 10 -i 1 || true
+```
+
+### Uninstall
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+helm uninstall oai-nr-ue -n oai
+```
+
 ## Note
 
 1. If you are using multus then make sure it is properly configured and if you don't have a gateway for your multus interface then avoid using gateway and defaultGateway parameter. Either comment them or leave them empty. Wrong gateway configuration can create issues with pod networking and pod will not be able to resolve service names.

@@ -153,3 +153,67 @@ ping -I oaitun_ue1 8.8.8.8
 ## Note
 
 1. If you are using multus then make sure it is properly configured and if you don't have a gateway for your multus interface then avoid using gateway and defaultGateway parameter. Either comment them or leave them empty. Wrong gateway configuration can create issues with pod networking and pod will not be able to resolve service names.
+
+## BMW / NFAPI (PNF) quickstart (install / upgrade / uninstall)
+
+This repo uses:
+- Multus macvlan interface `nfapi` (static IP) for NFAPI traffic
+- NFAPI ports (PNF): **P5 = 50000/SCTP**, **P7 = 50010/UDP**
+- A headless Service `oai-pnf` that exposes N2/N3/F1 + P5/P7
+
+### Prerequisites
+
+- Multus is installed on the cluster
+- The `multus.nfapiInterface.hostInterface` exists on the worker node (example on `worker-rt`: `eno1`, not `bond0`)
+- You have a working kubeconfig. For the `worker-rt` lab cluster used in this repo:
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+```
+
+### Install
+
+From `bmw-cicd-manifests/helm-charts/`:
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+kubectl get nodes
+
+helm upgrade --install oai-pnf ./oai-pnf -n oai --create-namespace -f ./oai-pnf/values.yaml
+kubectl rollout status -n oai deploy/oai-pnf
+kubectl get pods -n oai -o wide
+kubectl get svc -n oai oai-pnf -o wide
+```
+
+### Upgrade (apply changes)
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+helm upgrade oai-pnf ./oai-pnf -n oai -f ./oai-pnf/values.yaml
+kubectl rollout restart -n oai deploy/oai-pnf
+kubectl rollout status -n oai deploy/oai-pnf
+```
+
+### Uninstall
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+helm uninstall oai-pnf -n oai
+kubectl delete ns oai --ignore-not-found
+```
+
+### Useful checks
+
+```bash
+export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
+
+# Multus NAD created by the chart
+kubectl get net-attach-def -n oai
+
+# Verify Service ports include NFAPI P5/P7
+kubectl describe svc -n oai oai-pnf
+
+# Verify pod has nfapi interface + IP (inside container)
+PNF_POD="$(kubectl get pod -n oai -l app.kubernetes.io/name=oai-pnf -o jsonpath='{.items[0].metadata.name}')"
+kubectl exec -n oai "$PNF_POD" -- ip -br addr
+```
