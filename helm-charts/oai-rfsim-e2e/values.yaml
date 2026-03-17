@@ -12,11 +12,11 @@ cn:
     sd: "16777215"
     dnn: "oai"
 
-nfapiGnb:
+gnbNfapiVnf:
   enabled: true
   nfimage:
     repository: "bmw.ece.ntust.edu.tw/infidel/oai-gnb"
-    version: "nfapi"
+    version: "nfapi-rfsim-latest"
     pullPolicy: IfNotPresent
 
   serviceAccount:
@@ -75,11 +75,11 @@ nfapiGnb:
   nodeSelector: {}
   tolerations: []
 
-rfsimGnb:
+gnbNfapiPnfRfsim:
   enabled: true
   nfimage:
     repository: "bmw.ece.ntust.edu.tw/infidel/oai-gnb"
-    version: "nfapi"
+    version: "nfapi-rfsim-latest"
     pullPolicy: IfNotPresent
 
   serviceAccount:
@@ -90,7 +90,8 @@ rfsimGnb:
     timeZone: "Europe/Paris"
     # `--sa` is not a valid option for this PNF binary in RFsim mode and causes it to exit.
     # Keep RFsim enabled and use wall_clock logging only.
-    useAdditionalOptions: "--nfapi PNF --rfsim --log_config.global_log_options wall_clock"
+    # Match upstream docker-compose RFsim examples.
+    useAdditionalOptions: "-E --nfapi PNF --rfsim --rfsimulator.serveraddr 0.0.0.0 --log_config.global_log_options wall_clock"
     gnbName: "oai-gnb-rfsim"
     n2IfName: "eth0"
     n3IfName: "eth0"
@@ -144,7 +145,8 @@ nrUe:
     sst: "1"
     sd: "16777215"
     usrp: "rfsim"
-    useAdditionalOptions: "--sa --rfsim -r 106 --numerology 1 -C 3619200000 --log_config.global_log_options level,nocolor,time"
+    # Align with common OAI RFsim CLI: include `-E` and match gNB RF parameters (band/ssb).
+    useAdditionalOptions: "-E --sa --rfsim -r 106 --numerology 1 --band 78 --ssb 516 -C 3619200000 --log_config.global_log_options level,nocolor,time"
 
   start:
     nrue: true

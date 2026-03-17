@@ -1,4 +1,4 @@
-{{- if .Values.nfapiGnb.enabled }}
+{{- if .Values.gnbNfapiVnf.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,39 +17,39 @@ spec:
     metadata:
       labels:
         app: gnb-nfapi-vnf
-    {{- if .Values.nfapiGnb.multus.nfapiInterface.create }}
+    {{- if .Values.gnbNfapiVnf.multus.nfapiInterface.create }}
       annotations:
         k8s.v1.cni.cncf.io/networks: >-
           [{
                  "name": "{{ .Release.Name }}-nfapi",
                  "interface": "nfapi",
-                 "ips": [{{- cat .Values.nfapiGnb.multus.nfapiInterface.IPadd "/" .Values.nfapiGnb.multus.nfapiInterface.Netmask | nospace | quote }}]
+                 "ips": [{{- cat .Values.gnbNfapiVnf.multus.nfapiInterface.IPadd "/" .Values.gnbNfapiVnf.multus.nfapiInterface.Netmask | nospace | quote }}]
           }]
     {{- end }}
     spec:
       securityContext:
         runAsUser: 0
         runAsGroup: 0
-      {{- if .Values.nfapiGnb.serviceAccount.create }}
-      serviceAccountName: {{ .Values.nfapiGnb.serviceAccount.name }}
+      {{- if .Values.gnbNfapiVnf.serviceAccount.create }}
+      serviceAccountName: {{ .Values.gnbNfapiVnf.serviceAccount.name }}
       {{- end }}
       containers:
       - name: vnf
-        image: "{{ .Values.nfapiGnb.nfimage.repository }}:{{ .Values.nfapiGnb.nfimage.version }}"
-        imagePullPolicy: {{ .Values.nfapiGnb.nfimage.pullPolicy }}
+        image: "{{ .Values.gnbNfapiVnf.nfimage.repository }}:{{ .Values.gnbNfapiVnf.nfimage.version }}"
+        imagePullPolicy: {{ .Values.gnbNfapiVnf.nfimage.pullPolicy }}
         securityContext:
           privileged: true
         volumeMounts:
           - mountPath: /opt/oai-gnb/etc
             name: configuration
-        {{- if .Values.nfapiGnb.resources.define }}
+        {{- if .Values.gnbNfapiVnf.resources.define }}
         resources:
           requests:
-            cpu: {{ .Values.nfapiGnb.resources.requests.nf.cpu | quote }}
-            memory: {{ .Values.nfapiGnb.resources.requests.nf.memory | quote }}
+            cpu: {{ .Values.gnbNfapiVnf.resources.requests.nf.cpu | quote }}
+            memory: {{ .Values.gnbNfapiVnf.resources.requests.nf.memory | quote }}
           limits:
-            cpu: {{ .Values.nfapiGnb.resources.limits.nf.cpu | quote }}
-            memory: {{ .Values.nfapiGnb.resources.limits.nf.memory | quote }}
+            cpu: {{ .Values.gnbNfapiVnf.resources.limits.nf.cpu | quote }}
+            memory: {{ .Values.gnbNfapiVnf.resources.limits.nf.memory | quote }}
         {{- end }}
         ports:
         - containerPort: 2153
@@ -83,21 +83,21 @@ spec:
             exec /opt/oai-gnb/bin/nr-softmodem -O /tmp/du.conf $USE_ADDITIONAL_OPTIONS;
         env:
         - name: TZ
-          value: {{ .Values.nfapiGnb.config.timeZone }}
+          value: {{ .Values.gnbNfapiVnf.config.timeZone }}
         - name: USE_ADDITIONAL_OPTIONS
-          value: {{ .Values.nfapiGnb.config.useAdditionalOptions }}
+          value: {{ .Values.gnbNfapiVnf.config.useAdditionalOptions }}
         - name: NFAPI_TRACE_LEVEL
           value: info
         - name: AMF_HOST
           value: {{ .Values.cn.amf.host }}
         - name: N2_IF_NAME
-          value: {{ .Values.nfapiGnb.config.n2IfName }}
+          value: {{ .Values.gnbNfapiVnf.config.n2IfName }}
         - name: N3_IF_NAME
-          value: {{ .Values.nfapiGnb.config.n3IfName }}
+          value: {{ .Values.gnbNfapiVnf.config.n3IfName }}
         - name: NFAPI_IF_NAME
-          value: {{ .Values.nfapiGnb.config.nfapiIfName }}
+          value: {{ .Values.gnbNfapiVnf.config.nfapiIfName }}
         - name: PNF_HOST
-          value: {{ .Values.nfapiGnb.config.pnfHost | quote }}
+          value: {{ .Values.gnbNfapiVnf.config.pnfHost | quote }}
         - name: MCC
           value: {{ .Values.cn.plmn.mcc | quote }}
         - name: MNC

@@ -1,4 +1,4 @@
-{{- if .Values.rfsimGnb.enabled }}
+{{- if .Values.gnbNfapiPnfRfsim.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,26 +21,26 @@ spec:
       securityContext:
         runAsUser: 0
         runAsGroup: 0
-      {{- if .Values.rfsimGnb.serviceAccount.create }}
-      serviceAccountName: {{ .Values.rfsimGnb.serviceAccount.name }}
+      {{- if .Values.gnbNfapiPnfRfsim.serviceAccount.create }}
+      serviceAccountName: {{ .Values.gnbNfapiPnfRfsim.serviceAccount.name }}
       {{- end }}
       containers:
       - name: pnf
-        image: "{{ .Values.rfsimGnb.nfimage.repository }}:{{ .Values.rfsimGnb.nfimage.version }}"
-        imagePullPolicy: {{ .Values.rfsimGnb.nfimage.pullPolicy }}
+        image: "{{ .Values.gnbNfapiPnfRfsim.nfimage.repository }}:{{ .Values.gnbNfapiPnfRfsim.nfimage.version }}"
+        imagePullPolicy: {{ .Values.gnbNfapiPnfRfsim.nfimage.pullPolicy }}
         securityContext:
           privileged: true
         volumeMounts:
           - mountPath: /opt/oai-gnb/etc
             name: configuration
-        {{- if .Values.rfsimGnb.resources.define }}
+        {{- if .Values.gnbNfapiPnfRfsim.resources.define }}
         resources:
           requests:
-            cpu: {{ .Values.rfsimGnb.resources.requests.nf.cpu | quote }}
-            memory: {{ .Values.rfsimGnb.resources.requests.nf.memory | quote }}
+            cpu: {{ .Values.gnbNfapiPnfRfsim.resources.requests.nf.cpu | quote }}
+            memory: {{ .Values.gnbNfapiPnfRfsim.resources.requests.nf.memory | quote }}
           limits:
-            cpu: {{ .Values.rfsimGnb.resources.limits.nf.cpu | quote }}
-            memory: {{ .Values.rfsimGnb.resources.limits.nf.memory | quote }}
+            cpu: {{ .Values.gnbNfapiPnfRfsim.resources.limits.nf.cpu | quote }}
+            memory: {{ .Values.gnbNfapiPnfRfsim.resources.limits.nf.memory | quote }}
         {{- end }}
         ports:
         - containerPort: 36412
@@ -49,6 +49,9 @@ spec:
         - containerPort: 2152
           name: n3
           protocol: UDP
+        - containerPort: 4043
+          name: rfsim
+          protocol: TCP
         command: [ "/bin/bash", "-c" ]
         args:
           - |
@@ -61,13 +64,13 @@ spec:
             exec /opt/oai-gnb/bin/nr-softmodem -O /tmp/du.conf $USE_ADDITIONAL_OPTIONS;
         env:
         - name: TZ
-          value: {{ .Values.rfsimGnb.config.timeZone }}
+          value: {{ .Values.gnbNfapiPnfRfsim.config.timeZone }}
         - name: USE_ADDITIONAL_OPTIONS
-          value: {{ .Values.rfsimGnb.config.useAdditionalOptions }}
+          value: {{ .Values.gnbNfapiPnfRfsim.config.useAdditionalOptions }}
         - name: NFAPI_TRACE_LEVEL
           value: info
         - name: VNF_HOST
-          value: {{ .Values.rfsimGnb.config.nfapiServer.host | quote }}
+          value: {{ .Values.gnbNfapiPnfRfsim.config.nfapiServer.host | quote }}
       volumes:
         - name: configuration
           configMap:
