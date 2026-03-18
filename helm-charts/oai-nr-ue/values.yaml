@@ -50,7 +50,8 @@ config:
   sd: "ffffff"
   usrp: "rfsim"            # allowed rfsim, b2xx, n3xx, x3xx
   # Keep to options supported by the UE image tag in use
-  useAdditionalOptions: "--rfsim -r 106 --numerology 1 -C 3619200000 --log_config.global_log_options level,nocolor,time"
+  # Note: some custom UE builds do not reliably derive band/SSB from config; pass explicitly.
+  useAdditionalOptions: "--rfsim -r 106 --numerology 1 --band 78 --ssb 516 -C 3619200000 --log_config.global_log_options level,nocolor,time"
   #useAdditionalOptions: "-r 106 --numerology 1 --band 78 -C 3619200000 --sa --uicc0.imsi 001010000000001 --rfsim"
 
 podSecurityContext:
