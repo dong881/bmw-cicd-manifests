@@ -28,16 +28,33 @@ export KUBECONFIG=~/CRAN/kubeconfigs/worker-rt.config
 kubectl -n oai-cn get pods -o wide
 ```
 
-### 2) Deploy/upgrade RAN (PNF, VNF, UE)
+### 2) (First time) Create `regcred` pull secret for private registry
 
-From `bmw-cicd-manifests/helm-charts/`:
+The PNF/VNF/UE images are pulled from `bmw.ece.ntust.edu.tw`.
+Create the Kubernetes pull secret in `oai-ran` (only needed once per cluster):
+
+```bash
+kubectl -n oai-ran create secret docker-registry regcred \
+  --docker-server=bmw.ece.ntust.edu.tw \
+  --docker-username=<username> \
+  '--docker-password=<password>' \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Verify: `kubectl -n oai-ran get secret regcred`
+
+### 3) Deploy/upgrade RAN (PNF, VNF, UE)
+
+> **Important**: Always pass `--reset-values -f <values.yaml>` when upgrading.
+> Without these flags, Helm re-uses old user-supplied values from the release history,
+> and `nfimage.repository` silently falls back to the previously stored image (usually dockerhub).
 
 ```bash
 cd ~/CRAN/bmw-cicd-manifests/helm-charts
 
-helm -n oai-ran upgrade --install oai-pnf   ./oai-pnf   -f ./oai-pnf/values.yaml
-helm -n oai-ran upgrade --install oai-vnf   ./oai-vnf   -f ./oai-vnf/values.yaml
-helm -n oai-ran upgrade --install oai-nr-ue ./oai-nr-ue -f ./oai-nr-ue/values.yaml
+helm -n oai-ran upgrade --install oai-pnf   ./oai-pnf   -f ./oai-pnf/values.yaml   --reset-values
+helm -n oai-ran upgrade --install oai-vnf   ./oai-vnf   -f ./oai-vnf/values.yaml   --reset-values
+helm -n oai-ran upgrade --install oai-nr-ue ./oai-nr-ue -f ./oai-nr-ue/values.yaml --reset-values
 
 kubectl -n oai-ran rollout status deploy/oai-pnf
 kubectl -n oai-ran rollout status deploy/oai-vnf
@@ -45,7 +62,7 @@ kubectl -n oai-ran rollout status deploy/oai-nr-ue
 kubectl -n oai-ran get pods -o wide
 ```
 
-### 3) Verify UE got a UE IP (PDU session accept)
+### 4) Verify UE got a UE IP (PDU session accept)
 
 ```bash
 kubectl -n oai-ran logs deploy/oai-nr-ue --since=10m | grep -E "PDU Session Establishment Accept|UE IPv4" -n || true
@@ -58,7 +75,7 @@ UE_POD="$(kubectl -n oai-ran get pod -l app.kubernetes.io/name=oai-nr-ue -o json
 kubectl -n oai-ran exec "$UE_POD" -- ip -br a
 ```
 
-### 4) Test data plane: CN ping UE
+### 5) Test data plane: CN ping UE
 
 The `upf` container may not include `ping`, but the UPF pod usually has a `tcpdump` sidecar that does.
 
@@ -66,7 +83,7 @@ The `upf` container may not include `ping`, but the UPF pod usually has a `tcpdu
 kubectl -n oai-cn exec deploy/oai-upf -c tcpdump -- ping -c 4 -W 1 12.1.1.100
 ```
 
-### 5) Test throughput: CN → UE iperf3
+### 6) Test throughput: CN → UE iperf3
 
 Start an `iperf3` server inside the UE pod (bind to `oaitun_ue1` IP), then run the client from the UPF pod (tcpdump container).
 
@@ -80,7 +97,7 @@ kubectl -n oai-ran exec "$UE_POD" -- sh -lc 'pkill iperf3 2>/dev/null || true; n
 kubectl -n oai-cn exec deploy/oai-upf -c tcpdump -- iperf3 -c 12.1.1.100 -p 5201 -t 10 -P 1
 ```
 
-### 6) If CN→UE ping/iperf fails (common: stale TEID / unknown TEID drops)
+### 7) If CN→UE ping/iperf fails (common: stale TEID / unknown TEID drops)
 
 Symptom in `oai-vnf` logs:
 - `Received a incoming packet on unknown TEID (...) Dropping!`
