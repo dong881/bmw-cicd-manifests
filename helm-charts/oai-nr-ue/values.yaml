@@ -11,7 +11,7 @@ nfimage:
   # so using `oai-gnb` here will CrashLoop with "No such file or directory".
   # Prefer a UE image built from the same codebase/tag as your RAN (PNF/VNF)
   # to avoid RFSim protocol mismatches (which can segfault with ExitCode 139).
-  repository: bmw.ece.ntust.edu.tw/infidel/oai-nr-ue
+  repository: bmw.ece.ntust.edu.tw/minghong/oai-nr-ue
   version: 2026w11 # keep same tag as gNB
   # pullPolicy: IfNotPresent or Never or Always
   pullPolicy: IfNotPresent

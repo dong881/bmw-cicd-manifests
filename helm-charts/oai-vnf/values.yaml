@@ -5,7 +5,7 @@ kubernetesType: Vanilla  #Vanilla for community kubernetes distribution else Ope
 nfimage:   # image name either locally present or in a public/private repository
 #repository: docker.io/oaisoftwarealliance/oai-gnb           ## dockerhub oaisoftwarealliance/oai-gnb  
 #version: 2024.w22 # image tag or develop
-  repository: bmw.ece.ntust.edu.tw/infidel/oai-gnb
+  repository: bmw.ece.ntust.edu.tw/minghong/oai-gnb
   version: 2026w11 # keep same tag as UE
   # pullPolicy: IfNotPresent or Never or Always
   pullPolicy: IfNotPresent
