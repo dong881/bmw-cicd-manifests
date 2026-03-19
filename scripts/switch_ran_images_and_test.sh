@@ -27,6 +27,7 @@ PING_COUNT="${PING_COUNT:-2}"
 PING_TIMEOUT_SECONDS="${PING_TIMEOUT_SECONDS:-1}"
 IPERF_DIRECTION="${IPERF_DIRECTION:-dl}"   # dl|ul (traffic direction)
 IPERF_RETRIES="${IPERF_RETRIES:-5}"        # iperf attempts before giving up
+IPERF_CONNECT_TIMEOUT_MS="${IPERF_CONNECT_TIMEOUT_MS:-3000}"
 
 export KUBECONFIG="${KUBECONFIG_PATH}"
 
@@ -219,6 +220,13 @@ echo "=== Ping readiness wait (CN UPF -> UE) ==="
 PING_OUT=""
 PING_LOSS_PCT="100"
 for i in $(seq 1 "${PING_WAIT_SECONDS}"); do
+  # Re-resolve UPF pod in case it restarted mid-run.
+  UPF_POD="$(kubectl -n "${CN_NS}" get pod -l app.kubernetes.io/name=oai-upf -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+  if [[ -z "${UPF_POD}" ]]; then
+    echo "Ping check (${i}/${PING_WAIT_SECONDS}): UPF pod not found (yet)"
+    sleep 1
+    continue
+  fi
   PING_OUT="$(kubectl -n "${CN_NS}" exec "${UPF_POD}" -c "${UPF_TOOL_CONTAINER}" -- ping -c "${PING_COUNT}" -W "${PING_TIMEOUT_SECONDS}" "${UE_IP}" 2>&1 || true)"
   PING_LOSS_PCT="$(echo "${PING_OUT}" | awk '/packet loss/ {gsub(/%/,"",$6); print $6}' | head -n 1 || true)"
   [[ -z "${PING_LOSS_PCT}" ]] && PING_LOSS_PCT="100"
@@ -253,22 +261,30 @@ echo "=== iperf3 throughput (server=UPF, client=UE, direction=${IPERF_DIRECTION}
 IPERF_OUT=""
 for attempt in $(seq 1 "${IPERF_RETRIES}"); do
   echo "iperf attempt ${attempt}/${IPERF_RETRIES}"
+  # Re-resolve pods in case they restarted mid-run.
+  UPF_POD="$(kubectl -n "${CN_NS}" get pod -l app.kubernetes.io/name=oai-upf -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+  UE_POD="$(kubectl -n "${RAN_NS}" get pod -l app.kubernetes.io/name=oai-nr-ue -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+  if [[ -z "${UPF_POD}" || -z "${UE_POD}" ]]; then
+    echo "WARN: missing UPF/UE pod (UPF_POD=${UPF_POD:-none} UE_POD=${UE_POD:-none}), retrying..."
+    sleep 2
+    continue
+  fi
   # NOTE: iperf3 server has no -u flag; UDP is client-selected via -u.
   kubectl -n "${CN_NS}" exec "${UPF_POD}" -c "${UPF_TOOL_CONTAINER}" -- sh -lc "pkill iperf3 2>/dev/null || true; nohup iperf3 -s -p 5201 >/tmp/iperf3-server-upf.log 2>&1 & sleep 1" || true
 
   if [[ "${IPERF_MODE}" == "udp" ]]; then
     if [[ "${IPERF_DIRECTION}" == "dl" ]]; then
       # -R makes traffic from server->client (UPF->UE) => downlink
-      IPERF_OUT="$(kubectl -n "${RAN_NS}" exec "${UE_POD}" -- sh -lc "iperf3 -u -b ${IPERF_BW} -R -c ${UPF_TUN_IP} -p 5201 -t ${IPERF_TIME_SECONDS} -i 2 2>&1 || true")"
+      IPERF_OUT="$(kubectl -n "${RAN_NS}" exec "${UE_POD}" -- sh -lc "iperf3 --connect-timeout ${IPERF_CONNECT_TIMEOUT_MS} -u -b ${IPERF_BW} -R -c ${UPF_TUN_IP} -p 5201 -t ${IPERF_TIME_SECONDS} -i 2 2>&1 || true")"
     else
       # UE->UPF uplink (no -R)
-      IPERF_OUT="$(kubectl -n "${RAN_NS}" exec "${UE_POD}" -- sh -lc "iperf3 -u -b ${IPERF_BW} -c ${UPF_TUN_IP} -p 5201 -t ${IPERF_TIME_SECONDS} -i 2 2>&1 || true")"
+      IPERF_OUT="$(kubectl -n "${RAN_NS}" exec "${UE_POD}" -- sh -lc "iperf3 --connect-timeout ${IPERF_CONNECT_TIMEOUT_MS} -u -b ${IPERF_BW} -c ${UPF_TUN_IP} -p 5201 -t ${IPERF_TIME_SECONDS} -i 2 2>&1 || true")"
     fi
   else
     if [[ "${IPERF_DIRECTION}" == "dl" ]]; then
-      IPERF_OUT="$(kubectl -n "${RAN_NS}" exec "${UE_POD}" -- sh -lc "iperf3 -R -c ${UPF_TUN_IP} -p 5201 -t ${IPERF_TIME_SECONDS} -i 2 2>&1 || true")"
+      IPERF_OUT="$(kubectl -n "${RAN_NS}" exec "${UE_POD}" -- sh -lc "iperf3 --connect-timeout ${IPERF_CONNECT_TIMEOUT_MS} -R -c ${UPF_TUN_IP} -p 5201 -t ${IPERF_TIME_SECONDS} -i 2 2>&1 || true")"
     else
-      IPERF_OUT="$(kubectl -n "${RAN_NS}" exec "${UE_POD}" -- sh -lc "iperf3 -c ${UPF_TUN_IP} -p 5201 -t ${IPERF_TIME_SECONDS} -i 2 2>&1 || true")"
+      IPERF_OUT="$(kubectl -n "${RAN_NS}" exec "${UE_POD}" -- sh -lc "iperf3 --connect-timeout ${IPERF_CONNECT_TIMEOUT_MS} -c ${UPF_TUN_IP} -p 5201 -t ${IPERF_TIME_SECONDS} -i 2 2>&1 || true")"
     fi
   fi
 
