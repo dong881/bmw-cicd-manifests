@@ -17,6 +17,9 @@ REGISTRY_PROJECT="${REGISTRY_PROJECT:-minghong}"
 AUTO_TUNE_UE_FROM_GNB_LOG="${AUTO_TUNE_UE_FROM_GNB_LOG:-1}"
 UE_LOG_GLOBAL_OPTS="${UE_LOG_GLOBAL_OPTS:- --log_config.global_log_options level,nocolor,time}"
 UE_HINT_WAIT_SECONDS="${UE_HINT_WAIT_SECONDS:-120}"
+IPERF_MODE="${IPERF_MODE:-udp}"          # udp|tcp
+IPERF_BW="${IPERF_BW:-700M}"             # only used for UDP
+IPERF_TIME_SECONDS="${IPERF_TIME_SECONDS:-10}"
 
 export KUBECONFIG="${KUBECONFIG_PATH}"
 
@@ -37,6 +40,9 @@ echo "REGISTRY_SERVER=${REGISTRY_SERVER}"
 echo "REGISTRY_PROJECT=${REGISTRY_PROJECT}"
 echo "AUTO_TUNE_UE_FROM_GNB_LOG=${AUTO_TUNE_UE_FROM_GNB_LOG}"
 echo "UE_HINT_WAIT_SECONDS=${UE_HINT_WAIT_SECONDS}"
+echo "IPERF_MODE=${IPERF_MODE}"
+echo "IPERF_BW=${IPERF_BW}"
+echo "IPERF_TIME_SECONDS=${IPERF_TIME_SECONDS}"
 echo "TAG=${TAG}"
 echo
 
@@ -201,7 +207,11 @@ echo
 
 echo "=== iperf3 throughput (CN -> UE, 10s) ==="
 kubectl -n "${RAN_NS}" exec "${UE_POD}" -- bash -lc "pkill iperf3 2>/dev/null || true; nohup iperf3 -s -B ${UE_IP} -p 5201 >/tmp/iperf3-server.log 2>&1 & sleep 1; ss -lntp | grep 5201"
-IPERF_OUT="$(kubectl -n "${CN_NS}" exec "${UPF_POD}" -c "${UPF_TOOL_CONTAINER}" -- iperf3 -c "${UE_IP}" -p 5201 -t 10 -i 2 2>&1 || true)"
+if [[ "${IPERF_MODE}" == "udp" ]]; then
+  IPERF_OUT="$(kubectl -n "${CN_NS}" exec "${UPF_POD}" -c "${UPF_TOOL_CONTAINER}" -- iperf3 -u -b "${IPERF_BW}" -c "${UE_IP}" -p 5201 -t "${IPERF_TIME_SECONDS}" -i 2 2>&1 || true)"
+else
+  IPERF_OUT="$(kubectl -n "${CN_NS}" exec "${UPF_POD}" -c "${UPF_TOOL_CONTAINER}" -- iperf3 -c "${UE_IP}" -p 5201 -t "${IPERF_TIME_SECONDS}" -i 2 2>&1 || true)"
+fi
 echo "${IPERF_OUT}"
 
 IPERF_SENDER_MBPS="$(echo "${IPERF_OUT}" | awk '/sender$/ {print $(NF-2)}' | tail -n 1 | tr -d '\r' || true)"
@@ -216,3 +226,35 @@ echo "UE_IP=${UE_IP}"
 echo "PING_AVG_MS=${PING_AVG_MS:-unknown}"
 echo "IPERF_SENDER=${IPERF_SENDER_MBPS:-unknown} ${IPERF_SENDER_UNIT:-}"
 echo "IPERF_RECEIVER=${IPERF_RECV_MBPS:-unknown} ${IPERF_RECV_UNIT:-}"
+
+# If ping/iperf failed but UE has IP, it's commonly stale CN state after upgrades.
+# Do one controlled recovery (restart UPF + UE) and retry once.
+if echo "${PING_OUT}" | grep -q "100% packet loss"; then
+  echo
+  echo "=== Recovery: ping failed, restarting UPF and UE then retry once ==="
+  kubectl -n "${CN_NS}" rollout restart deploy/oai-upf || true
+  kubectl -n "${CN_NS}" rollout status deploy/oai-upf --timeout=180s || true
+  kubectl -n "${RAN_NS}" rollout restart deploy/oai-nr-ue || true
+  kubectl -n "${RAN_NS}" rollout status deploy/oai-nr-ue --timeout=240s || true
+
+  UE_POD="$(kubectl -n "${RAN_NS}" get pod -l app.kubernetes.io/name=oai-nr-ue -o jsonpath='{.items[0].metadata.name}')"
+  UE_IP=""
+  for i in $(seq 1 60); do
+    UE_IP="$(kubectl -n "${RAN_NS}" exec "${UE_POD}" -- bash -lc "ip -4 -o addr show dev oaitun_ue1 2>/dev/null | tr -s ' ' | cut -d' ' -f4 | cut -d/ -f1" | tr -d '\r' || true)"
+    [[ -n "${UE_IP}" ]] && break
+    sleep 1
+  done
+  UPF_POD="$(kubectl -n "${CN_NS}" get pod -l app.kubernetes.io/name=oai-upf -o jsonpath='{.items[0].metadata.name}')"
+  UPF_TOOL_CONTAINER="$(pick_upf_tool_container "${CN_NS}" "${UPF_POD}" || true)"
+
+  echo "Retry UE_IP=${UE_IP} UPF_POD=${UPF_POD} UPF_TOOL_CONTAINER=${UPF_TOOL_CONTAINER}"
+  echo "=== Ping retry ==="
+  kubectl -n "${CN_NS}" exec "${UPF_POD}" -c "${UPF_TOOL_CONTAINER}" -- ping -c 5 -W 2 "${UE_IP}" 2>&1 || true
+  echo "=== iperf retry ==="
+  kubectl -n "${RAN_NS}" exec "${UE_POD}" -- bash -lc "pkill iperf3 2>/dev/null || true; nohup iperf3 -s -B ${UE_IP} -p 5201 >/tmp/iperf3-server.log 2>&1 & sleep 1" || true
+  if [[ "${IPERF_MODE}" == "udp" ]]; then
+    kubectl -n "${CN_NS}" exec "${UPF_POD}" -c "${UPF_TOOL_CONTAINER}" -- iperf3 -u -b "${IPERF_BW}" -c "${UE_IP}" -p 5201 -t "${IPERF_TIME_SECONDS}" -i 2 2>&1 || true
+  else
+    kubectl -n "${CN_NS}" exec "${UPF_POD}" -c "${UPF_TOOL_CONTAINER}" -- iperf3 -c "${UE_IP}" -p 5201 -t "${IPERF_TIME_SECONDS}" -i 2 2>&1 || true
+  fi
+fi
