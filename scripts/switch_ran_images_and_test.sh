@@ -324,24 +324,21 @@ if [[ "${PING_LOSS_PCT}" == "100" ]]; then
   echo "Retry UE_IP=${UE_IP} UPF_POD=${UPF_POD} UPF_TOOL_CONTAINER=${UPF_TOOL_CONTAINER}"
   echo "=== Ping retry ==="
   kubectl -n "${CN_NS}" exec "${UPF_POD}" -c "${UPF_TOOL_CONTAINER}" -- ping -c 5 -W 2 "${UE_IP}" 2>&1 || true
-  echo "=== iperf retry (direction aware) ==="
-  if [[ "${IPERF_REVERSE}" == "1" ]]; then
-    UPF_TUN_IP="$(kubectl -n "${CN_NS}" exec "${UPF_POD}" -c "${UPF_TOOL_CONTAINER}" -- sh -lc "ip -4 -o addr show dev tun0 2>/dev/null | tr -s ' ' | cut -d' ' -f4 | cut -d/ -f1 | head -n 1" 2>/dev/null | tr -d '\r' || true)"
-    [[ -z "${UPF_TUN_IP}" ]] && UPF_TUN_IP="12.1.1.1"
-    # NOTE: iperf3 server has no -u flag; UDP is client-selected via -u.
-    kubectl -n "${CN_NS}" exec "${UPF_POD}" -c "${UPF_TOOL_CONTAINER}" -- sh -lc "pkill iperf3 2>/dev/null || true; nohup iperf3 -s -p 5201 >/tmp/iperf3-server-upf.log 2>&1 & sleep 1" || true
-    if [[ "${IPERF_MODE}" == "udp" ]]; then
-      kubectl -n "${RAN_NS}" exec "${UE_POD}" -- sh -lc "iperf3 -u -b ${IPERF_BW} -c ${UPF_TUN_IP} -p 5201 -t ${IPERF_TIME_SECONDS} -i 2 2>&1 || true" || true
+  echo "=== iperf retry (server=UPF, client=UE, direction=${IPERF_DIRECTION}) ==="
+  UPF_TUN_IP="$(kubectl -n "${CN_NS}" exec "${UPF_POD}" -c "${UPF_TOOL_CONTAINER}" -- sh -lc "ip -4 -o addr show dev tun0 2>/dev/null | tr -s ' ' | cut -d' ' -f4 | cut -d/ -f1 | head -n 1" 2>/dev/null | tr -d '\r' || true)"
+  [[ -z "${UPF_TUN_IP}" ]] && UPF_TUN_IP="12.1.1.1"
+  kubectl -n "${CN_NS}" exec "${UPF_POD}" -c "${UPF_TOOL_CONTAINER}" -- sh -lc "pkill iperf3 2>/dev/null || true; nohup iperf3 -s -p 5201 >/tmp/iperf3-server-upf.log 2>&1 & sleep 1" || true
+  if [[ "${IPERF_MODE}" == "udp" ]]; then
+    if [[ "${IPERF_DIRECTION}" == "dl" ]]; then
+      kubectl -n "${RAN_NS}" exec "${UE_POD}" -- sh -lc "iperf3 -u -b ${IPERF_BW} -R -c ${UPF_TUN_IP} -p 5201 -t ${IPERF_TIME_SECONDS} -i 2 2>&1 || true" || true
     else
-      kubectl -n "${RAN_NS}" exec "${UE_POD}" -- sh -lc "iperf3 -c ${UPF_TUN_IP} -p 5201 -t ${IPERF_TIME_SECONDS} -i 2 2>&1 || true" || true
+      kubectl -n "${RAN_NS}" exec "${UE_POD}" -- sh -lc "iperf3 -u -b ${IPERF_BW} -c ${UPF_TUN_IP} -p 5201 -t ${IPERF_TIME_SECONDS} -i 2 2>&1 || true" || true
     fi
   else
-    if [[ "${IPERF_MODE}" == "udp" ]]; then
-      kubectl -n "${RAN_NS}" exec "${UE_POD}" -- bash -lc "pkill iperf3 2>/dev/null || true; nohup iperf3 -s -u -B ${UE_IP} -p 5201 >/tmp/iperf3-server.log 2>&1 & sleep 1" || true
-      kubectl -n "${CN_NS}" exec "${UPF_POD}" -c "${UPF_TOOL_CONTAINER}" -- iperf3 -u -b "${IPERF_BW}" -c "${UE_IP}" -p 5201 -t "${IPERF_TIME_SECONDS}" -i 2 2>&1 || true
+    if [[ "${IPERF_DIRECTION}" == "dl" ]]; then
+      kubectl -n "${RAN_NS}" exec "${UE_POD}" -- sh -lc "iperf3 -R -c ${UPF_TUN_IP} -p 5201 -t ${IPERF_TIME_SECONDS} -i 2 2>&1 || true" || true
     else
-      kubectl -n "${RAN_NS}" exec "${UE_POD}" -- bash -lc "pkill iperf3 2>/dev/null || true; nohup iperf3 -s -B ${UE_IP} -p 5201 >/tmp/iperf3-server.log 2>&1 & sleep 1" || true
-      kubectl -n "${CN_NS}" exec "${UPF_POD}" -c "${UPF_TOOL_CONTAINER}" -- iperf3 -c "${UE_IP}" -p 5201 -t "${IPERF_TIME_SECONDS}" -i 2 2>&1 || true
+      kubectl -n "${RAN_NS}" exec "${UE_POD}" -- sh -lc "iperf3 -c ${UPF_TUN_IP} -p 5201 -t ${IPERF_TIME_SECONDS} -i 2 2>&1 || true" || true
     fi
   fi
 fi
