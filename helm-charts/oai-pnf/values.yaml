@@ -61,7 +61,9 @@ config:
   timeZone: "Europe/Paris"
   #useAdditionalOptions: "--nfapi PNF --rfsim --rfsimulator.serveraddr server --phy-test"
   #useAdditionalOptions: "--sa --rfsim --nfapi PNF" 
-  useAdditionalOptions: "--nfapi PNF --rfsim --rfsimulator.serveraddr server --log_config.global_log_options level,nocolor,time"
+  # `min_rxtxtime` is important in RFsim because UE needs enough minimum feedback time.
+  # Keeping it at 6 matches the recommended rfsim+UE settings used in OAI docs.
+  useAdditionalOptions: "--nfapi PNF --rfsim --rfsimulator.serveraddr server --gNBs.[0].min_rxtxtime 4 --log_config.global_log_options level,nocolor,time"
   #useAdditionalOptions: "--gNBs.[0].min_rxtxtime 6 --continuous-tx --nfapi PNF"
 
   # If mounting the configuration file then below parameters are not used

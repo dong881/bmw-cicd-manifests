@@ -63,11 +63,16 @@ spec:
             # Resolve RFsim server to a numeric IP (nr-uesoftmodem does not reliably resolve hostnames)
             RFSIM_IP_ADDRESS="";
             for i in $(seq 1 60); do
-              RFSIM_IP_ADDRESS=$(getent hosts "$RFSIM_HOST" | awk 'NR==1{print $1}');
-              if [[ -n "$RFSIM_IP_ADDRESS" ]]; then
-                break;
-              fi;
-              echo "Waiting for DNS for RFSIM_HOST=$RFSIM_HOST ($i/60)";
+              # `oai-pnf` is a headless Service (clusterIP: None) => getent may return stale pod IPs during rollout.
+              # We additionally probe TCP port 4043 so UE only starts when the rfsim server is actually reachable.
+              RFSIM_CANDIDATES="$(getent hosts "$RFSIM_HOST" | awk '{print $1}' | sort -u)";
+              for ip in $RFSIM_CANDIDATES; do
+                if timeout 1 bash -lc "echo > /dev/tcp/${ip}/4043" >/dev/null 2>&1; then
+                  RFSIM_IP_ADDRESS="$ip";
+                  break 2;
+                fi;
+              done;
+              echo "Waiting for reachable RFSIM server for RFSIM_HOST=$RFSIM_HOST ($i/60)";
               sleep 1;
             done;
             if [[ -z "$RFSIM_IP_ADDRESS" ]]; then
