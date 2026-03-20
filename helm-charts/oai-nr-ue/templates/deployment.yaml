@@ -36,6 +36,7 @@ spec:
       containers:
       - name: nr-ue
         image: "{{ .Values.nfimage.repository }}:{{ .Values.nfimage.version }}"
+        imagePullPolicy: {{ .Values.nfimage.pullPolicy }}
         volumeMounts:
           - mountPath: /opt/oai-nr-ue/etc
             name: configuration

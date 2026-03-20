@@ -49,6 +49,7 @@ spec:
       containers:
       - name: vnf
         image: "{{ .Values.nfimage.repository }}:{{ .Values.nfimage.version }}"
+        imagePullPolicy: {{ .Values.nfimage.pullPolicy }}
         volumeMounts:
           - mountPath: /opt/oai-gnb/etc
             name: configuration

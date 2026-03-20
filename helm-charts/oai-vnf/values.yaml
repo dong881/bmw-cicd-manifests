@@ -8,7 +8,7 @@ nfimage:   # image name either locally present or in a public/private repository
   repository: bmw.ece.ntust.edu.tw/minghong/oai-gnb
   version: 2026w11 # keep same tag as UE
   # pullPolicy: IfNotPresent or Never or Always
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 ## good to use when pulling images from docker-hub mention 
 imagePullSecrets:

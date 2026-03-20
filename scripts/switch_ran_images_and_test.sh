@@ -33,6 +33,8 @@ ROLLOUT_TIMEOUT_UE_SECONDS="${ROLLOUT_TIMEOUT_UE_SECONDS:-300}"
 # NFAPI P7 can be racey after rollouts; check P7 and do one controlled PNF restart if missing.
 P7_WAIT_SECONDS="${P7_WAIT_SECONDS:-35}"
 P7_REPAIR_SLEEP_SECONDS="${P7_REPAIR_SLEEP_SECONDS:-10}"
+P7_CHECK_BEFORE_PING="${P7_CHECK_BEFORE_PING:-1}"     # run NFAPI P7 gate even in RUN_MODE=test
+P7_REPAIR_ON_PING_GATE_FAIL="${P7_REPAIR_ON_PING_GATE_FAIL:-1}"  # do one PNF restart if P7 gate fails
 
 IPERF_MODE="${IPERF_MODE:-udp}"
 IPERF_BW="${IPERF_BW:-700M}"
@@ -241,6 +243,45 @@ fi
 
 refresh_ran_pod_refs
 
+if [[ "${RUN_MODE}" == "test" && "${AUTO_TUNE_UE_FROM_GNB_LOG}" == "1" ]]; then
+  echo "=== Test mode: auto-tune UE RF params from gNB logs (single UE rollout) ==="
+  UE_HINT_LINE=""
+  UE_HINT_SRC=""
+  for i in $(seq 1 "${UE_HINT_WAIT_SECONDS}"); do
+    PNF_POD="$(kubectl -n "${RAN_NS}" get pod -l app.kubernetes.io/name=oai-pnf -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+    VNF_POD="$(kubectl -n "${RAN_NS}" get pod -l app.kubernetes.io/name=oai-vnf -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+    UE_HINT_LINE=""
+    if [[ -n "${PNF_POD}" ]]; then
+      UE_HINT_SRC="pnf"
+      UE_HINT_LINE="$(kubectl -n "${RAN_NS}" logs "${PNF_POD}" --tail=20000 2>/dev/null | grep -E "Command line parameters for OAI UE:" | tail -n 1 || true)"
+    fi
+    if [[ -z "${UE_HINT_LINE}" && -n "${VNF_POD}" ]]; then
+      UE_HINT_SRC="vnf"
+      UE_HINT_LINE="$(kubectl -n "${RAN_NS}" logs "${VNF_POD}" --tail=20000 2>/dev/null | grep -E "Command line parameters for OAI UE:" | tail -n 1 || true)"
+    fi
+    [[ -n "${UE_HINT_LINE}" ]] && break
+    echo "Waiting for UE hint line in PNF/VNF logs... (${i}/${UE_HINT_WAIT_SECONDS})"
+    sleep 1
+  done
+
+  if [[ -n "${UE_HINT_LINE}" ]]; then
+    UE_HINT_OPTS="${UE_HINT_LINE#*: }"
+    UE_ADDITIONAL="--rfsim ${UE_HINT_OPTS}${UE_LOG_GLOBAL_OPTS}"
+    UE_ADDITIONAL_ESCAPED="${UE_ADDITIONAL//,/\\,}"
+    echo "Detected UE hint from ${UE_HINT_SRC}: ${UE_HINT_OPTS}"
+    echo "Applying UE useAdditionalOptions: ${UE_ADDITIONAL}"
+    helm upgrade oai-nr-ue -n "${RAN_NS}" "${CHARTS_DIR}/oai-nr-ue" \
+      -f "${CHARTS_DIR}/oai-nr-ue/values.yaml" --reset-values \
+      --set "nfimage.repository=${REGISTRY_SERVER}/${REGISTRY_PROJECT}/oai-nr-ue" \
+      --set "nfimage.version=${TAG}" \
+      --set-string "config.useAdditionalOptions=${UE_ADDITIONAL_ESCAPED}"
+    kubectl -n "${RAN_NS}" rollout status deploy/oai-nr-ue --timeout="${ROLLOUT_TIMEOUT_UE_SECONDS}s"
+    refresh_ran_pod_refs
+  else
+    echo "WARN: could not find UE hint line in PNF/VNF logs in test mode; keeping current UE options."
+  fi
+fi
+
 echo "=== UE oaitun_ue1 (container=${UE_K8S_CONTAINER}) ==="
 UE_IP=""
 for i in $(seq 1 "${UE_TUN_WAIT_SECONDS}"); do
@@ -269,6 +310,39 @@ wait_upf_ready_for_ping
   UPF_TOOL_CONTAINER="$(pick_upf_tool_container "${CN_NS}" "${UPF_POD}" || true)"
 }
 [[ -z "${UPF_TOOL_CONTAINER:-}" ]] && { echo "ERROR: UPF has no container with ping+iperf3"; exit 1; }
+
+if [[ "${P7_CHECK_BEFORE_PING}" == "1" ]]; then
+  refresh_ran_pod_refs
+  if ! wait_nfapi_p7_ready; then
+    if [[ "${P7_REPAIR_ON_PING_GATE_FAIL}" == "1" ]]; then
+      echo "=== P7 repair before ping: one-time PNF restart ==="
+      kubectl -n "${RAN_NS}" rollout restart deploy/oai-pnf
+      kubectl -n "${RAN_NS}" rollout status deploy/oai-pnf --timeout="${ROLLOUT_TIMEOUT_PNF_SECONDS}s"
+      sleep "${P7_REPAIR_SLEEP_SECONDS}"
+      refresh_ran_pod_refs
+      wait_nfapi_p7_ready || { echo "ERROR: NFAPI P7 still not ready before ping"; exit 1; }
+      if [[ "${RUN_MODE}" == "test" ]]; then
+        echo "=== Test mode: restart UE once after P7 repair ==="
+        kubectl -n "${RAN_NS}" rollout restart deploy/oai-nr-ue || true
+        kubectl -n "${RAN_NS}" rollout status deploy/oai-nr-ue --timeout="${ROLLOUT_TIMEOUT_UE_SECONDS}s" || true
+        refresh_ran_pod_refs
+        UE_IP=""
+        for i in $(seq 1 "${UE_TUN_WAIT_SECONDS}"); do
+          UE_POD="$(kubectl -n "${RAN_NS}" get pod -l app.kubernetes.io/name=oai-nr-ue -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+          UE_IP="$(kubectl -n "${RAN_NS}" exec "${UE_POD}" -c "${UE_K8S_CONTAINER}" -- bash -lc "ip -4 -o addr show dev oaitun_ue1 2>/dev/null | tr -s ' ' | cut -d' ' -f4 | cut -d/ -f1" | tr -d '\r' || true)"
+          [[ -n "${UE_IP}" ]] && break
+          sleep 1
+        done
+        [[ -z "${UE_IP}" ]] && { echo "ERROR: UE did not get oaitun_ue1 IPv4 after restart"; exit 1; }
+        echo "UE_IP=${UE_IP}"
+        [[ "${POST_UE_TUN_STABILIZE_SECONDS}" =~ ^[0-9]+$ ]] && [[ "${POST_UE_TUN_STABILIZE_SECONDS}" -gt 0 ]] && sleep "${POST_UE_TUN_STABILIZE_SECONDS}"
+      fi
+    else
+      echo "ERROR: NFAPI P7 not ready before ping (P7_REPAIR_ON_PING_GATE_FAIL=0)"
+      exit 1
+    fi
+  fi
+fi
 
 UPF_TUN_IP="$(kubectl -n "${CN_NS}" exec "${UPF_POD}" -c "${UPF_TOOL_CONTAINER}" -- sh -lc "ip -4 -o addr show dev tun0 2>/dev/null | tr -s ' ' | cut -d' ' -f4 | cut -d/ -f1 | head -n 1" 2>/dev/null | tr -d '\r' || true)"
 [[ -z "${UPF_TUN_IP}" ]] && UPF_TUN_IP="12.1.1.1"
